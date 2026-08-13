@@ -1,32 +1,40 @@
-// initializing the app here we will
-// import all our modules from different files and 
-// initialize the server not that resuable but 
-// structurally very common
-import express from 'express'
+// iniializing the app and configuritaions
+import express from "express";
 import cookieParser from "cookie-parser";
-import authRoutes from "./routes/auth.routes"
-import { errorHandler } from './middleware/error.middleware';
-import { ApiResponse } from './utils/responseApi';
-import { Request, Response } from "express";
 
+import authRoutes from "./routes/auth.routes";
+import { errorHandler } from "./middleware/error.middleware";
+import { requestLogger } from "./middleware/requestlogger.middleware";
+
+import { corsConfig } from "./config/cors";
+import {
+    apiRateLimiter,
+    authRateLimiter,
+} from "./config/ratelimit";
 
 const app = express();
+
+app.use(corsConfig);
 app.use(express.json());
-app.use(cookieParser()); 
+app.use(cookieParser());
 
-app.use("/api/auth",authRoutes)
+app.use(requestLogger);
 
-app.get("/api",(req : Request,res : Response)=>{
-    const response : ApiResponse ={
-        success : true,
-        data : null
-    } 
-    return res.status(200).json({
-        response
-    })
-    })
+app.use(apiRateLimiter);
 
-app.use(errorHandler)
+app.use(
+    "/api/auth",
+    authRateLimiter,
+    authRoutes
+);
+
+app.get("/api", (_req, res) => {
+    res.status(200).json({
+        success: true,
+        data: null,
+    });
+});
+
+app.use(errorHandler);
 
 export default app;
-

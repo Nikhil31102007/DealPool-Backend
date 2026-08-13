@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Firebase Auth Test</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 30px;
+        }
+
+        button {
+            margin-right: 8px;
+            margin-bottom: 15px;
+            padding: 8px 14px;
+            cursor: pointer;
+        }
+
+        input,
+        textarea {
+            display: block;
+            margin-bottom: 20px;
+        }
+
+        #output {
+            width: 700px;
+            max-height: 600px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            padding: 10px;
+        }
+
+        .response {
+            border-bottom: 1px solid #ccc;
+            padding: 15px 5px;
+            margin-bottom: 10px;
+        }
+
+        .response-title {
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+
+        .response pre {
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>Firebase Google Auth Test</h1>
+
+    <button id="googleLogin">
+        Continue with Google
+    </button>
+
+    <button id="getMe">
+        GET /me
+    </button>
+
+    <button id="refresh">
+        Refresh Token
+    </button>
+
+    <button id="logout">
+        Logout
+    </button>
+
+    <h3>Firebase UID</h3>
+
+    <input
+        id="uid"
+        type="text"
+        readonly
+        style="width: 500px;"
+    >
+
+    <h3>Firebase ID Token</h3>
+
+    <textarea
+        id="idToken"
+        readonly
+        rows="6"
+        cols="70"
+    ></textarea>
+
+    <h3>Responses</h3>
+
+    <div id="output"></div>
+
+    <script type="module">
+
+        import {
+            initializeApp
+        } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
+
+        import {
+            getAuth,
+            GoogleAuthProvider,
+            signInWithPopup
+        } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
+
+
+        const firebaseConfig = {
+                // secret!!
+        };
+
+
+        const app = initializeApp(firebaseConfig);
+
+        const auth = getAuth(app);
+
+        const provider = new GoogleAuthProvider();
+
+
+        const googleLogin =
+            document.getElementById("googleLogin");
+
+        const getMe =
+            document.getElementById("getMe");
+
+        const refresh =
+            document.getElementById("refresh");
+
+        const logout =
+            document.getElementById("logout");
+
+        const uid =
+            document.getElementById("uid");
+
+        const idToken =
+            document.getElementById("idToken");
+
+        const output =
+            document.getElementById("output");
+
+
+        /*
+         * Add a response to the response history.
+         */
+        function showResponse(title, response, data) {
+
+            const container =
+                document.createElement("div");
+
+            container.className =
+                "response";
+
+
+            const responseTitle =
+                document.createElement("div");
+
+            responseTitle.className =
+                "response-title";
+
+            responseTitle.textContent =
+                `${new Date().toLocaleTimeString()} | ${title} | HTTP ${response.status}`;
+
+
+            const responseBody =
+                document.createElement("pre");
+
+            responseBody.textContent =
+                JSON.stringify(
+                    data,
+                    null,
+                    2
+                );
+
+
+            container.appendChild(
+                responseTitle
+            );
+
+            container.appendChild(
+                responseBody
+            );
+
+
+            /*
+             * Newest response appears at the top.
+             */
+            output.prepend(container);
+        }
+
+
+        /*
+         * Show errors in the response history.
+         */
+        function showError(title, error) {
+
+            const container =
+                document.createElement("div");
+
+            container.className =
+                "response";
+
+
+            const responseTitle =
+                document.createElement("div");
+
+            responseTitle.className =
+                "response-title";
+
+            responseTitle.textContent =
+                `${new Date().toLocaleTimeString()} | ${title} | ERROR`;
+
+
+            const responseBody =
+                document.createElement("pre");
+
+            responseBody.textContent =
+                error.message || String(error);
+
+
+            container.appendChild(
+                responseTitle
+            );
+
+            container.appendChild(
+                responseBody
+            );
+
+
+            output.prepend(container);
+        }
+
+
+        /*
+         * Google Login
+         */
+        googleLogin.addEventListener(
+            "click",
+            async () => {
+
+                if (googleLogin.disabled) {
+                    return;
+                }
+
+                googleLogin.disabled = true;
+
+                try {
+
+                    const result =
+                        await signInWithPopup(
+                            auth,
+                            provider
+                        );
+
+
+                    const user =
+                        result.user;
+
+
+                    const token =
+                        await user.getIdToken();
+
+
+                    uid.value =
+                        user.uid;
+
+                    idToken.value =
+                        token;
+
+
+                    console.log(
+                        "Firebase UID:",
+                        user.uid
+                    );
+
+                    console.log(
+                        "Firebase ID Token:",
+                        token
+                    );
+
+
+                    /*
+                     * Send Firebase ID token
+                     * to backend.
+                     */
+                    const response =
+                        await fetch(
+                            "http://localhost:3000/api/auth/google",
+                            {
+                                method: "POST",
+
+                                credentials: "include",
+
+                                headers: {
+                                    "Content-Type":
+                                        "application/json"
+                                },
+
+                                body: JSON.stringify({
+                                    idToken: token
+                                })
+                            }
+                        );
+
+
+                    const data =
+                        await response.json();
+
+
+                    showResponse(
+                        "POST /api/auth/google",
+                        response,
+                        data
+                    );
+
+                } catch (error) {
+
+                    console.error(error);
+
+                    showError(
+                        "POST /api/auth/google",
+                        error
+                    );
+
+                } finally {
+
+                    googleLogin.disabled = false;
+                }
+            }
+        );
+
+
+        /*
+         * GET /me
+         *
+         * Browser automatically sends
+         * the HTTP-only accessToken cookie.
+         */
+        getMe.addEventListener(
+            "click",
+            async () => {
+
+                try {
+
+                    const response =
+                        await fetch(
+                            "http://localhost:3000/api/auth/me",
+                            {
+                                method: "GET",
+
+                                credentials: "include"
+                            }
+                        );
+
+
+                    const data =
+                        await response.json();
+
+
+                    showResponse(
+                        "GET /api/auth/me",
+                        response,
+                        data
+                    );
+
+                } catch (error) {
+
+                    console.error(error);
+
+                    showError(
+                        "GET /api/auth/me",
+                        error
+                    );
+                }
+            }
+        );
+
+
+        /*
+         * POST /refresh
+         *
+         * Browser automatically sends
+         * the refreshToken cookie.
+         */
+        refresh.addEventListener(
+            "click",
+            async () => {
+
+                try {
+
+                    const response =
+                        await fetch(
+                            "http://localhost:3000/api/auth/refresh",
+                            {
+                                method: "POST",
+
+                                credentials: "include"
+                            }
+                        );
+
+
+                    const data =
+                        await response.json();
+
+
+                    showResponse(
+                        "POST /api/auth/refresh",
+                        response,
+                        data
+                    );
+
+                } catch (error) {
+
+                    console.error(error);
+
+                    showError(
+                        "POST /api/auth/refresh",
+                        error
+                    );
+                }
+            }
+        );
+
+
+        /*
+         * POST /logout
+         *
+         * Backend clears:
+         *
+         * accessToken
+         * refreshToken
+         */
+        logout.addEventListener(
+            "click",
+            async () => {
+
+                try {
+
+                    const response =
+                        await fetch(
+                            "http://localhost:3000/api/auth/logout",
+                            {
+                                method: "POST",
+
+                                credentials: "include"
+                            }
+                        );
+
+
+                    const data =
+                        await response.json();
+
+
+                    showResponse(
+                        "POST /api/auth/logout",
+                        response,
+                        data
+                    );
+
+
+                    /*
+                     * Clear Firebase client session.
+                     */
+                    await auth.signOut();
+
+
+                    uid.value = "";
+
+                    idToken.value = "";
+
+
+                } catch (error) {
+
+                    console.error(error);
+
+                    showError(
+                        "POST /api/auth/logout",
+                        error
+                    );
+                }
+            }
+        );
+
+    </script>
+
+</body>
+
+</html>

@@ -13,6 +13,15 @@ interface FirebaseAuthResponse {
     expiresIn: string;
 }
 
+interface FirebaseRefreshResponse {
+    id_token: string;
+    refresh_token: string;
+    expires_in: string;
+    user_id: string;
+    project_id: string;
+    token_type: string;
+}
+
 const firebaseApiKey = process.env.FIREBASE_API_KEY;
 
 if (!firebaseApiKey) {
@@ -21,6 +30,9 @@ if (!firebaseApiKey) {
 
 const firebaseAuthUrl =
     "https://identitytoolkit.googleapis.com/v1/accounts";
+
+const firebaseSecureTokenUrl =
+    "https://securetoken.googleapis.com/v1/token";
 
 const firebaseRequest = async <T>(
     endpoint: string,
@@ -41,12 +53,10 @@ const firebaseRequest = async <T>(
 
     if (!response.ok) {
         const message =
-            data?.error?.message ?? "Firebase authentication failed";
+            data?.error?.message ??
+            "Firebase authentication failed";
 
-        if (
-            message === "EMAIL_EXISTS" ||
-            message === "EMAIL_NOT_FOUND"
-        ) {
+        if (message === "EMAIL_EXISTS") {
             throw conflict(
                 "Email already exists",
                 "EMAIL_EXISTS"
@@ -54,6 +64,7 @@ const firebaseRequest = async <T>(
         }
 
         if (
+            message === "EMAIL_NOT_FOUND" ||
             message === "INVALID_PASSWORD" ||
             message === "INVALID_LOGIN_CREDENTIALS"
         ) {
@@ -127,6 +138,7 @@ export const registerUser = async (
         return {
             profile,
             token: firebaseUser.idToken,
+            refreshToken: firebaseUser.refreshToken,
         };
     } catch (error) {
         try {
@@ -172,6 +184,52 @@ export const loginUser = async (
     return {
         profile,
         token: firebaseUser.idToken,
+        refreshToken: firebaseUser.refreshToken,
+    };
+};
+
+export const refreshFirebaseToken = async (
+    refreshToken: string
+) => {
+    if (!refreshToken) {
+        throw unauthorized(
+            "Refresh token is required",
+            "INVALID_REFRESH_TOKEN"
+        );
+    }
+
+    const response = await fetch(
+        `${firebaseSecureTokenUrl}?key=${firebaseApiKey}`,
+        {
+            method: "POST",
+            headers: {
+                "Content-Type":
+                    "application/x-www-form-urlencoded",
+            },
+            body: new URLSearchParams({
+                grant_type: "refresh_token",
+                refresh_token: refreshToken,
+            }),
+        }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+        throw unauthorized(
+            "Invalid or expired refresh token",
+            "INVALID_REFRESH_TOKEN"
+        );
+    }
+
+    const refreshed =
+        data as FirebaseRefreshResponse;
+
+    return {
+        token: refreshed.id_token,
+        refreshToken: refreshed.refresh_token,
+        expiresIn: refreshed.expires_in,
+        uid: refreshed.user_id,
     };
 };
 
@@ -261,4 +319,46 @@ export const verifyFirebaseToken = async (
             "INVALID_TOKEN"
         );
     }
+};
+
+export const findProfile = async (
+    uid: string
+) => {
+    const result = await pool.query(
+        `
+        SELECT *
+        FROM profiles
+        WHERE firebase_uid = $1
+        `,
+        [uid]
+    );
+
+    return result.rows[0] ?? null;
+};
+
+export const googleLoginUser = async (
+    idToken: string
+) => {
+    if (!idToken) {
+        throw unauthorized(
+            "Firebase ID token is required",
+            "INVALID_TOKEN"
+        );
+    }
+
+    const decoded =
+        await verifyFirebaseToken(idToken);
+
+    let profile =
+        await findProfile(decoded.uid);
+
+    if (!profile) {
+        profile =
+            await createProfile(decoded.uid);
+    }
+
+    return {
+        profile,
+        token: idToken,
+    };
 };

@@ -4,6 +4,8 @@ import {
     login,
     me,
     logout,
+    refresh,
+    googleLogin
 } from "../controllers/auth.controller";
 import { authMiddleware } from "../middleware/auth.middleware";
 
@@ -13,5 +15,7 @@ router.post("/register", register);
 router.post("/login", login);
 router.get("/me", authMiddleware, me);
 router.post("/logout", logout);
+router.post("/refresh",refresh);
+router.post("/google", googleLogin);
 
 export default router;

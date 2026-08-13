@@ -1,3 +1,4 @@
+// verifies auth 
 import {
     Request,
     Response,
@@ -24,8 +25,7 @@ export const authMiddleware = async (
             return;
         }
 
-        const decoded =
-            await verifyFirebaseToken(token);
+        const decoded = await verifyFirebaseToken(token);
 
         req.user = decoded;
 

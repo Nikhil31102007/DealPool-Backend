@@ -1,3 +1,5 @@
+// initializng the fire setup 
+//  injecting env vars into it
 import dotenv from "dotenv";
 import {
     cert,

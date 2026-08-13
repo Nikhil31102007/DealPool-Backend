@@ -1,11 +1,10 @@
 import dotenv from "dotenv";
+import path from "path";
 import request from "supertest";
 import { firebaseAuth } from "../src/config/firebase";
 
-import path from "path";
-
 dotenv.config({
-    path: path.resolve(process.cwd(), "../.env"),
+    path: path.resolve(process.cwd(), ".env"),
 });
 
 const { default: app } = await import("../src/app");
@@ -14,8 +13,10 @@ const email = `test-${Date.now()}@example.com`;
 const password = "TestPassword123!";
 const name = "Test User";
 
-let authCookie: string;
-let firebaseUid: string;
+let firebaseUid: string | undefined;
+
+let accessTokenCookie: string;
+let refreshTokenCookie: string;
 
 const test = async (
     name: string,
@@ -29,6 +30,37 @@ const test = async (
         console.error(error);
         process.exitCode = 1;
     }
+};
+
+const getCookies = (
+    response: request.Response
+): string[] => {
+    const cookies = response.headers["set-cookie"];
+
+    if (!cookies) {
+        return [];
+    }
+
+    return Array.isArray(cookies)
+        ? cookies
+        : [cookies];
+};
+
+const getCookie = (
+    cookies: string[],
+    name: string
+): string => {
+    const cookie = cookies.find((value) =>
+        value.startsWith(`${name}=`)
+    );
+
+    if (!cookie) {
+        throw new Error(
+            `${name} cookie was not set`
+        );
+    }
+
+    return cookie;
 };
 
 try {
@@ -100,34 +132,17 @@ try {
                 );
             }
 
-            const cookies =
-                response.headers["set-cookie"] as
-                    | string[]
-                    | undefined;
+            const cookies = getCookies(response);
 
-            if (
-                !cookies ||
-                cookies.length === 0
-            ) {
-                throw new Error(
-                    "Authentication cookie was not set"
-                );
-            }
+            accessTokenCookie = getCookie(
+                cookies,
+                "accessToken"
+            );
 
-            const accessTokenCookie =
-                cookies.find((cookie) =>
-                    cookie.startsWith(
-                        "accessToken="
-                    )
-                );
-
-            if (!accessTokenCookie) {
-                throw new Error(
-                    "accessToken cookie was not set"
-                );
-            }
-
-            authCookie = accessTokenCookie;
+            refreshTokenCookie = getCookie(
+                cookies,
+                "refreshToken"
+            );
 
             const user =
                 await firebaseAuth.getUserByEmail(
@@ -247,34 +262,17 @@ try {
                 );
             }
 
-            const cookies =
-                response.headers["set-cookie"] as
-                    | string[]
-                    | undefined;
+            const cookies = getCookies(response);
 
-            if (
-                !cookies ||
-                cookies.length === 0
-            ) {
-                throw new Error(
-                    "Authentication cookie was not set"
-                );
-            }
+            accessTokenCookie = getCookie(
+                cookies,
+                "accessToken"
+            );
 
-            const accessTokenCookie =
-                cookies.find((cookie) =>
-                    cookie.startsWith(
-                        "accessToken="
-                    )
-                );
-
-            if (!accessTokenCookie) {
-                throw new Error(
-                    "accessToken cookie was not set"
-                );
-            }
-
-            authCookie = accessTokenCookie;
+            refreshTokenCookie = getCookie(
+                cookies,
+                "refreshToken"
+            );
         }
     );
 
@@ -299,7 +297,7 @@ try {
     );
 
     await test(
-        "GET /api/auth/me rejects invalid cookie",
+        "GET /api/auth/me rejects invalid access token",
         async () => {
             const response = await request(app)
                 .get("/api/auth/me")
@@ -325,19 +323,24 @@ try {
     await test(
         "GET /api/auth/me returns authenticated user",
         async () => {
-            if (!authCookie) {
+            if (!accessTokenCookie) {
                 throw new Error(
-                    "No authentication cookie available"
+                    "No access token cookie available"
                 );
             }
 
             const response = await request(app)
                 .get("/api/auth/me")
-                .set("Cookie", authCookie);
+                .set(
+                    "Cookie",
+                    accessTokenCookie
+                );
 
             if (response.status !== 200) {
                 throw new Error(
-                    `Expected 200, got ${response.status}`
+                    `Expected 200, got ${response.status}: ${JSON.stringify(
+                        response.body
+                    )}`
                 );
             }
 
@@ -365,17 +368,235 @@ try {
     );
 
     await test(
-        "POST /api/auth/logout clears authentication cookie",
+        "POST /api/auth/refresh rejects request without refresh token",
         async () => {
-            if (!authCookie) {
+            const response = await request(app)
+                .post("/api/auth/refresh");
+
+            if (response.status !== 401) {
                 throw new Error(
-                    "No authentication cookie available"
+                    `Expected 401, got ${response.status}`
+                );
+            }
+
+            if (response.body.success !== false) {
+                throw new Error(
+                    "Expected success to be false"
+                );
+            }
+        }
+    );
+
+    await test(
+        "POST /api/auth/refresh rejects invalid refresh token",
+        async () => {
+            const response = await request(app)
+                .post("/api/auth/refresh")
+                .set(
+                    "Cookie",
+                    "refreshToken=invalid-refresh-token"
+                );
+
+            if (response.status !== 401) {
+                throw new Error(
+                    `Expected 401, got ${response.status}`
+                );
+            }
+
+            if (response.body.success !== false) {
+                throw new Error(
+                    "Expected success to be false"
+                );
+            }
+        }
+    );
+
+    await test(
+        "POST /api/auth/refresh creates new access token",
+        async () => {
+            if (!refreshTokenCookie) {
+                throw new Error(
+                    "No refresh token cookie available"
                 );
             }
 
             const response = await request(app)
+                .post("/api/auth/refresh")
+                .set(
+                    "Cookie",
+                    refreshTokenCookie
+                );
+
+            if (response.status !== 200) {
+                throw new Error(
+                    `Expected 200, got ${response.status}: ${JSON.stringify(
+                        response.body
+                    )}`
+                );
+            }
+
+            if (response.body.success !== true) {
+                throw new Error(
+                    "Expected success to be true"
+                );
+            }
+
+            const cookies = getCookies(response);
+
+            accessTokenCookie = getCookie(
+                cookies,
+                "accessToken"
+            );
+
+            refreshTokenCookie = getCookie(
+                cookies,
+                "refreshToken"
+            );
+        }
+    );
+
+    await test(
+        "GET /api/auth/me works with refreshed access token",
+        async () => {
+            if (!accessTokenCookie) {
+                throw new Error(
+                    "No refreshed access token cookie available"
+                );
+            }
+
+            const response = await request(app)
+                .get("/api/auth/me")
+                .set(
+                    "Cookie",
+                    accessTokenCookie
+                );
+
+            if (response.status !== 200) {
+                throw new Error(
+                    `Expected 200, got ${response.status}: ${JSON.stringify(
+                        response.body
+                    )}`
+                );
+            }
+
+            if (response.body.success !== true) {
+                throw new Error(
+                    "Expected success to be true"
+                );
+            }
+
+            if (
+                response.body.data.firebase_uid !==
+                firebaseUid
+            ) {
+                throw new Error(
+                    "Incorrect Firebase UID after refresh"
+                );
+            }
+        }
+    );
+
+    await test(
+        "POST /api/auth/refresh rotates refresh token",
+        async () => {
+            if (!refreshTokenCookie) {
+                throw new Error(
+                    "No refresh token cookie available"
+                );
+            }
+
+            const oldRefreshToken =
+                refreshTokenCookie;
+
+            const response = await request(app)
+                .post("/api/auth/refresh")
+                .set(
+                    "Cookie",
+                    refreshTokenCookie
+                );
+
+            if (response.status !== 200) {
+                throw new Error(
+                    `Expected 200, got ${response.status}`
+                );
+            }
+
+            const cookies = getCookies(response);
+
+            const newAccessTokenCookie =
+                getCookie(
+                    cookies,
+                    "accessToken"
+                );
+
+            const newRefreshTokenCookie =
+                getCookie(
+                    cookies,
+                    "refreshToken"
+                );
+
+            if (
+                newAccessTokenCookie ===
+                accessTokenCookie
+            ) {
+                throw new Error(
+                    "Access token was not refreshed"
+                );
+            }
+
+            if (
+                newRefreshTokenCookie ===
+                oldRefreshToken
+            ) {
+                throw new Error(
+                    "Refresh token was not rotated"
+                );
+            }
+
+            accessTokenCookie =
+                newAccessTokenCookie;
+
+            refreshTokenCookie =
+                newRefreshTokenCookie;
+        }
+    );
+
+    await test(
+        "GET /api/auth/me works after refresh token rotation",
+        async () => {
+            const response = await request(app)
+                .get("/api/auth/me")
+                .set(
+                    "Cookie",
+                    accessTokenCookie
+                );
+
+            if (response.status !== 200) {
+                throw new Error(
+                    `Expected 200, got ${response.status}`
+                );
+            }
+
+            if (response.body.success !== true) {
+                throw new Error(
+                    "Expected success to be true"
+                );
+            }
+        }
+    );
+
+    await test(
+        "POST /api/auth/logout clears access and refresh cookies",
+        async () => {
+            const response = await request(app)
                 .post("/api/auth/logout")
-                .set("Cookie", authCookie);
+                .set(
+                    "Cookie",
+                    [
+                        accessTokenCookie,
+                        refreshTokenCookie,
+                    ]
+                );
 
             if (response.status !== 200) {
                 throw new Error(
@@ -395,43 +616,72 @@ try {
                 );
             }
 
-            const cookies =
-                response.headers["set-cookie"] as
-                    | string[]
-                    | undefined;
+            const cookies = getCookies(response);
 
-            if (
-                !cookies ||
-                cookies.length === 0
-            ) {
-                throw new Error(
-                    "Clear-cookie header was not sent"
-                );
-            }
-
-            const accessTokenCookie =
+            const accessCookie =
                 cookies.find((cookie) =>
                     cookie.startsWith(
                         "accessToken="
                     )
                 );
 
-            if (!accessTokenCookie) {
+            const refreshCookie =
+                cookies.find((cookie) =>
+                    cookie.startsWith(
+                        "refreshToken="
+                    )
+                );
+
+            if (!accessCookie) {
                 throw new Error(
-                    "accessToken clear-cookie header was not sent"
+                    "Access token clear-cookie header was not sent"
                 );
             }
 
-            authCookie = accessTokenCookie;
+            if (!refreshCookie) {
+                throw new Error(
+                    "Refresh token clear-cookie header was not sent"
+                );
+            }
+
+            accessTokenCookie = accessCookie;
+            refreshTokenCookie = refreshCookie;
         }
     );
 
     await test(
-        "GET /api/auth/me rejects old cookie after logout",
+        "GET /api/auth/me rejects old access token after logout",
         async () => {
             const response = await request(app)
                 .get("/api/auth/me")
-                .set("Cookie", authCookie);
+                .set(
+                    "Cookie",
+                    accessTokenCookie
+                );
+
+            if (response.status !== 401) {
+                throw new Error(
+                    `Expected 401 after logout, got ${response.status}`
+                );
+            }
+
+            if (response.body.success !== false) {
+                throw new Error(
+                    "Expected success to be false"
+                );
+            }
+        }
+    );
+
+    await test(
+        "POST /api/auth/refresh rejects cleared refresh token",
+        async () => {
+            const response = await request(app)
+                .post("/api/auth/refresh")
+                .set(
+                    "Cookie",
+                    refreshTokenCookie
+                );
 
             if (response.status !== 401) {
                 throw new Error(

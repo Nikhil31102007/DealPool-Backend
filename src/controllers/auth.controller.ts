@@ -3,8 +3,24 @@ import {
     loginUser,
     registerUser,
     getProfile,
+    refreshFirebaseToken,
+    googleLoginUser,
 } from "../services/auth.service";
 import type { ApiResponse } from "../utils/responseApi";
+
+const accessTokenCookieOptions = {
+    httpOnly: true,
+    sameSite: "lax" as const,
+    maxAge: 60 * 60 * 1000,
+    path: "/",
+};
+
+const refreshTokenCookieOptions = {
+    httpOnly: true,
+    sameSite: "lax" as const,
+    maxAge: 60 * 24 * 60 * 60 * 1000,
+    path: "/",
+};
 
 export const register = async (
     req: Request,
@@ -14,18 +30,27 @@ export const register = async (
     try {
         const { email, password, name } = req.body;
 
-        const { profile, token } = await registerUser(
+        const {
+            profile,
+            token,
+            refreshToken,
+        } = await registerUser(
             email,
             password,
             name
         );
 
-        res.cookie("accessToken", token, {
-            httpOnly: true,
-            sameSite: "lax",
-            maxAge: 60 * 60 * 1000,
-            path: "/",
-        });
+        res.cookie(
+            "accessToken",
+            token,
+            accessTokenCookieOptions
+        );
+
+        res.cookie(
+            "refreshToken",
+            refreshToken,
+            refreshTokenCookieOptions
+        );
 
         const response: ApiResponse<typeof profile> = {
             success: true,
@@ -46,21 +71,73 @@ export const login = async (
     try {
         const { email, password } = req.body;
 
-        const { profile, token } = await loginUser(
+        const {
+            profile,
+            token,
+            refreshToken,
+        } = await loginUser(
             email,
             password
         );
 
-        res.cookie("accessToken", token, {
-            httpOnly: true,
-            sameSite: "lax",
-            maxAge: 60 * 60 * 1000,
-            path: "/",
-        });
+        res.cookie(
+            "accessToken",
+            token,
+            accessTokenCookieOptions
+        );
+
+        res.cookie(
+            "refreshToken",
+            refreshToken,
+            refreshTokenCookieOptions
+        );
 
         const response: ApiResponse<typeof profile> = {
             success: true,
             data: profile,
+        };
+
+        res.status(200).json(response);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const refresh = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+): Promise<void> => {
+    try {
+        const refreshToken = req.cookies?.refreshToken;
+
+        if (!refreshToken) {
+            res.status(401).json({
+                success: false,
+                message: "Refresh token not found",
+            });
+            return;
+        }
+
+        const refreshed = await refreshFirebaseToken(
+            refreshToken
+        );
+
+        res.cookie(
+            "accessToken",
+            refreshed.token,
+            accessTokenCookieOptions
+        );
+
+        res.cookie(
+            "refreshToken",
+            refreshed.refreshToken,
+            refreshTokenCookieOptions
+        );
+
+        const response: ApiResponse<null> = {
+            success: true,
+            data: null,
         };
 
         res.status(200).json(response);
@@ -75,7 +152,9 @@ export const me = async (
     next: NextFunction
 ): Promise<void> => {
     try {
-        const profile = await getProfile(req.user!.uid);
+        const profile = await getProfile(
+            req.user!.uid
+        );
 
         const response: ApiResponse<typeof profile> = {
             success: true,
@@ -98,10 +177,57 @@ export const logout = (
         path: "/",
     });
 
+    res.clearCookie("refreshToken", {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+    });
+
     const response: ApiResponse<null> = {
         success: true,
         data: null,
     };
 
     res.status(200).json(response);
+};
+
+export const googleLogin = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+): Promise<void> => {
+    try {
+        const { idToken } = req.body;
+
+        if (!idToken) {
+            res.status(401).json({
+                success: false,
+                error: {
+                    message: "Firebase ID token is required",
+                    code: "INVALID_TOKEN",
+                },
+            });
+            return;
+        }
+
+        const {
+            profile,
+            token,
+        } = await googleLoginUser(idToken);
+
+        res.cookie(
+            "accessToken",
+            token,
+            accessTokenCookieOptions
+        );
+
+        const response: ApiResponse<typeof profile> = {
+            success: true,
+            data: profile,
+        };
+
+        res.status(200).json(response);
+    } catch (error) {
+        next(error);
+    }
 };

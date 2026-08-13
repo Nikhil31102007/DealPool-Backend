@@ -1,3 +1,4 @@
+// handles role based auth it helps in admin panel
 import { Request, Response, NextFunction } from "express";
 
 import { unauthorized, forbidden } from "../utils/errors";

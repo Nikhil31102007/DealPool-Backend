@@ -1,3 +1,6 @@
+// initializing the supabase db
+// we are diractly using postgresql 
+// cuz we can
 import dotenv from "dotenv";
 import { Pool } from "pg";
 
