@@ -63,10 +63,6 @@
         GET /me
     </button>
 
-    <button id="refresh">
-        Refresh Token
-    </button>
-
     <button id="logout">
         Logout
     </button>
@@ -105,10 +101,15 @@
             signInWithPopup
         } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 
-
-        const firebaseConfig = {
-                // secret!!
-        };
+const firebaseConfig = {
+  apiKey: "AIzaSyDeGFAr3dYtJfUJlh2fSzoCmyOC93cOA8E",
+  authDomain: "dealpoolbackend.firebaseapp.com",
+  projectId: "dealpoolbackend",
+  storageBucket: "dealpoolbackend.firebasestorage.app",
+  messagingSenderId: "113744651425",
+  appId: "1:113744651425:web:e795fd7bd98b22148cbce0",
+  measurementId: "G-LD8T2PZ2HX"
+};
 
 
         const app = initializeApp(firebaseConfig);
@@ -123,9 +124,6 @@
 
         const getMe =
             document.getElementById("getMe");
-
-        const refresh =
-            document.getElementById("refresh");
 
         const logout =
             document.getElementById("logout");
@@ -369,52 +367,6 @@
 
                     showError(
                         "GET /api/auth/me",
-                        error
-                    );
-                }
-            }
-        );
-
-
-        /*
-         * POST /refresh
-         *
-         * Browser automatically sends
-         * the refreshToken cookie.
-         */
-        refresh.addEventListener(
-            "click",
-            async () => {
-
-                try {
-
-                    const response =
-                        await fetch(
-                            "http://localhost:3000/api/auth/refresh",
-                            {
-                                method: "POST",
-
-                                credentials: "include"
-                            }
-                        );
-
-
-                    const data =
-                        await response.json();
-
-
-                    showResponse(
-                        "POST /api/auth/refresh",
-                        response,
-                        data
-                    );
-
-                } catch (error) {
-
-                    console.error(error);
-
-                    showError(
-                        "POST /api/auth/refresh",
                         error
                     );
                 }

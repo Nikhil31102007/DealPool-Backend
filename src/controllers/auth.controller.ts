@@ -5,6 +5,7 @@ import {
     getProfile,
     refreshFirebaseToken,
     googleLoginUser,
+    updateProfile,
 } from "../services/auth.service";
 import type { ApiResponse } from "../utils/responseApi";
 
@@ -28,29 +29,12 @@ export const register = async (
     next: NextFunction
 ): Promise<void> => {
     try {
-        const { email, password, name } = req.body;
+        const { email, password } = req.body;
 
-        const {
-            profile,
-            token,
-            refreshToken,
-        } = await registerUser(
-            email,
-            password,
-            name
-        );
+        const { profile, token, refreshToken } = await registerUser(email, password);
 
-        res.cookie(
-            "accessToken",
-            token,
-            accessTokenCookieOptions
-        );
-
-        res.cookie(
-            "refreshToken",
-            refreshToken,
-            refreshTokenCookieOptions
-        );
+        res.cookie("accessToken", token, accessTokenCookieOptions);
+        res.cookie("refreshToken", refreshToken, refreshTokenCookieOptions);
 
         const response: ApiResponse<typeof profile> = {
             success: true,
@@ -71,26 +55,10 @@ export const login = async (
     try {
         const { email, password } = req.body;
 
-        const {
-            profile,
-            token,
-            refreshToken,
-        } = await loginUser(
-            email,
-            password
-        );
+        const { profile, token, refreshToken } = await loginUser(email, password);
 
-        res.cookie(
-            "accessToken",
-            token,
-            accessTokenCookieOptions
-        );
-
-        res.cookie(
-            "refreshToken",
-            refreshToken,
-            refreshTokenCookieOptions
-        );
+        res.cookie("accessToken", token, accessTokenCookieOptions);
+        res.cookie("refreshToken", refreshToken, refreshTokenCookieOptions);
 
         const response: ApiResponse<typeof profile> = {
             success: true,
@@ -119,21 +87,10 @@ export const refresh = async (
             return;
         }
 
-        const refreshed = await refreshFirebaseToken(
-            refreshToken
-        );
+        const refreshed = await refreshFirebaseToken(refreshToken);
 
-        res.cookie(
-            "accessToken",
-            refreshed.token,
-            accessTokenCookieOptions
-        );
-
-        res.cookie(
-            "refreshToken",
-            refreshed.refreshToken,
-            refreshTokenCookieOptions
-        );
+        res.cookie("accessToken", refreshed.token, accessTokenCookieOptions);
+        res.cookie("refreshToken", refreshed.refreshToken, refreshTokenCookieOptions);
 
         const response: ApiResponse<null> = {
             success: true,
@@ -152,9 +109,7 @@ export const me = async (
     next: NextFunction
 ): Promise<void> => {
     try {
-        const profile = await getProfile(
-            req.user!.uid
-        );
+        const profile = await getProfile(req.user!.uid);
 
         const response: ApiResponse<typeof profile> = {
             success: true,
@@ -167,10 +122,7 @@ export const me = async (
     }
 };
 
-export const logout = (
-    _req: Request,
-    res: Response
-): void => {
+export const logout = (_req: Request, res: Response): void => {
     res.clearCookie("accessToken", {
         httpOnly: true,
         sameSite: "lax",
@@ -210,16 +162,34 @@ export const googleLogin = async (
             return;
         }
 
-        const {
-            profile,
-            token,
-        } = await googleLoginUser(idToken);
+        const { profile, token } = await googleLoginUser(idToken);
 
-        res.cookie(
-            "accessToken",
-            token,
-            accessTokenCookieOptions
-        );
+        res.cookie("accessToken", token, accessTokenCookieOptions);
+
+        const response: ApiResponse<typeof profile> = {
+            success: true,
+            data: profile,
+        };
+
+        res.status(200).json(response);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const updateMe = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+): Promise<void> => {
+    try {
+        const { username, email, profile_photo } = req.body;
+
+        const profile = await updateProfile(req.user!.uid, {
+            username,
+            email,
+            profile_photo,
+        });
 
         const response: ApiResponse<typeof profile> = {
             success: true,

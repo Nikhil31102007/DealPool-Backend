@@ -11,9 +11,9 @@ import {
     apiRateLimiter,
     authRateLimiter,
 } from "./config/ratelimit";
+import adminRoutes from "./routes/admin.routes";
 
 const app = express();
-
 app.use(corsConfig);
 app.use(express.json());
 app.use(cookieParser());
@@ -27,6 +27,8 @@ app.use(
     authRateLimiter,
     authRoutes
 );
+
+app.use("/api/admin", adminRoutes);
 
 app.get("/api", (_req, res) => {
     res.status(200).json({

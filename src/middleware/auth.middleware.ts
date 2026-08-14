@@ -1,10 +1,5 @@
-// verifies auth 
-import {
-    Request,
-    Response,
-    NextFunction,
-} from "express";
-import { verifyFirebaseToken } from "../services/auth.service";
+import { Request, Response, NextFunction } from "express";
+import { verifyFirebaseToken, findProfile } from "../services/auth.service";
 
 export const authMiddleware = async (
     req: Request,
@@ -26,8 +21,24 @@ export const authMiddleware = async (
         }
 
         const decoded = await verifyFirebaseToken(token);
+        const profile = await findProfile(decoded.uid);
 
-        req.user = decoded;
+        if (!profile) {
+            res.status(401).json({
+                success: false,
+                error: {
+                    message: "User profile not found",
+                    code: "PROFILE_NOT_FOUND",
+                },
+            });
+            return;
+        }
+
+        req.user = {
+            uid: decoded.uid,
+            email: decoded.email,
+            role: profile.role,
+        };
 
         next();
     } catch (error) {

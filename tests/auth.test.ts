@@ -11,12 +11,17 @@ const { default: app } = await import("../src/app");
 
 const email = `test-${Date.now()}@example.com`;
 const password = "TestPassword123!";
-const name = "Test User";
+
+const secondEmail = `test-${Date.now()}-2@example.com`;
 
 let firebaseUid: string | undefined;
+let secondFirebaseUid: string | undefined;
 
 let accessTokenCookie: string;
 let refreshTokenCookie: string;
+
+let secondAccessTokenCookie: string;
+let secondUsername: string;
 
 const test = async (
     name: string,
@@ -86,14 +91,13 @@ try {
     );
 
     await test(
-        "POST /api/auth/register creates Firebase user and profile",
+        "POST /api/auth/register creates Firebase user and profile with generated username",
         async () => {
             const response = await request(app)
                 .post("/api/auth/register")
                 .send({
                     email,
                     password,
-                    name,
                 });
 
             if (response.status !== 201) {
@@ -116,45 +120,46 @@ try {
                 );
             }
 
-            if (
-                response.body.data.email !== email
-            ) {
+            if (response.body.data.email !== email) {
                 throw new Error(
                     "Incorrect email returned"
                 );
             }
 
-            if (
-                response.body.data.name !== name
-            ) {
+            if (!response.body.data.username) {
                 throw new Error(
-                    "Incorrect name returned"
+                    "Username was not generated"
+                );
+            }
+
+            if (response.body.data.role !== "user") {
+                throw new Error(
+                    "Default role should be 'user'"
+                );
+            }
+
+            if (Number(response.body.data.avg_rating) !== 0) {
+                throw new Error(
+                    "Default avg_rating should be 0"
+                );
+            }
+
+            if (response.body.data.rating_count !== 0) {
+                throw new Error(
+                    "Default rating_count should be 0"
                 );
             }
 
             const cookies = getCookies(response);
 
-            accessTokenCookie = getCookie(
-                cookies,
-                "accessToken"
-            );
+            accessTokenCookie = getCookie(cookies, "accessToken");
+            refreshTokenCookie = getCookie(cookies, "refreshToken");
 
-            refreshTokenCookie = getCookie(
-                cookies,
-                "refreshToken"
-            );
-
-            const user =
-                await firebaseAuth.getUserByEmail(
-                    email
-                );
+            const user = await firebaseAuth.getUserByEmail(email);
 
             firebaseUid = user.uid;
 
-            if (
-                response.body.data.firebase_uid !==
-                firebaseUid
-            ) {
+            if (response.body.data.firebase_uid !== firebaseUid) {
                 throw new Error(
                     "Profile Firebase UID does not match Firebase user"
                 );
@@ -170,7 +175,6 @@ try {
                 .send({
                     email,
                     password,
-                    name,
                 });
 
             if (response.status !== 409) {
@@ -264,23 +268,15 @@ try {
 
             const cookies = getCookies(response);
 
-            accessTokenCookie = getCookie(
-                cookies,
-                "accessToken"
-            );
-
-            refreshTokenCookie = getCookie(
-                cookies,
-                "refreshToken"
-            );
+            accessTokenCookie = getCookie(cookies, "accessToken");
+            refreshTokenCookie = getCookie(cookies, "refreshToken");
         }
     );
 
     await test(
         "GET /api/auth/me rejects unauthenticated request",
         async () => {
-            const response = await request(app)
-                .get("/api/auth/me");
+            const response = await request(app).get("/api/auth/me");
 
             if (response.status !== 401) {
                 throw new Error(
@@ -301,10 +297,7 @@ try {
         async () => {
             const response = await request(app)
                 .get("/api/auth/me")
-                .set(
-                    "Cookie",
-                    "accessToken=invalid-token"
-                );
+                .set("Cookie", "accessToken=invalid-token");
 
             if (response.status !== 401) {
                 throw new Error(
@@ -324,17 +317,12 @@ try {
         "GET /api/auth/me returns authenticated user",
         async () => {
             if (!accessTokenCookie) {
-                throw new Error(
-                    "No access token cookie available"
-                );
+                throw new Error("No access token cookie available");
             }
 
             const response = await request(app)
                 .get("/api/auth/me")
-                .set(
-                    "Cookie",
-                    accessTokenCookie
-                );
+                .set("Cookie", accessTokenCookie);
 
             if (response.status !== 200) {
                 throw new Error(
@@ -356,10 +344,7 @@ try {
                 );
             }
 
-            if (
-                response.body.data.firebase_uid !==
-                firebaseUid
-            ) {
+            if (response.body.data.firebase_uid !== firebaseUid) {
                 throw new Error(
                     "Incorrect Firebase UID returned"
                 );
@@ -368,10 +353,161 @@ try {
     );
 
     await test(
-        "POST /api/auth/refresh rejects request without refresh token",
+        "PATCH /api/auth/update rejects unauthenticated request",
         async () => {
             const response = await request(app)
-                .post("/api/auth/refresh");
+                .patch("/api/auth/update")
+                .send({ username: "whatever" });
+
+            if (response.status !== 401) {
+                throw new Error(
+                    `Expected 401, got ${response.status}`
+                );
+            }
+        }
+    );
+
+    await test(
+        "PATCH /api/auth/update rejects empty body",
+        async () => {
+            const response = await request(app)
+                .patch("/api/auth/update")
+                .set("Cookie", accessTokenCookie)
+                .send({});
+
+            if (response.status !== 400) {
+                throw new Error(
+                    `Expected 400, got ${response.status}: ${JSON.stringify(
+                        response.body
+                    )}`
+                );
+            }
+
+            if (response.body.success !== false) {
+                throw new Error(
+                    "Expected success to be false"
+                );
+            }
+        }
+    );
+
+    await test(
+        "PATCH /api/auth/update ignores role field and updates username",
+        async () => {
+            const newUsername = `updated_user_${Date.now()}`;
+
+            const response = await request(app)
+                .patch("/api/auth/update")
+                .set("Cookie", accessTokenCookie)
+                .send({
+                    username: newUsername,
+                    role: "admin",
+                });
+
+            if (response.status !== 200) {
+                throw new Error(
+                    `Expected 200, got ${response.status}: ${JSON.stringify(
+                        response.body
+                    )}`
+                );
+            }
+
+            if (response.body.data.username !== newUsername) {
+                throw new Error(
+                    "Username was not updated"
+                );
+            }
+
+            if (response.body.data.role !== "user") {
+                throw new Error(
+                    "Role should not be changeable through /api/auth/update"
+                );
+            }
+        }
+    );
+
+    await test(
+        "POST /api/auth/register creates a second user for collision testing",
+        async () => {
+            const response = await request(app)
+                .post("/api/auth/register")
+                .send({
+                    email: secondEmail,
+                    password,
+                });
+
+            if (response.status !== 201) {
+                throw new Error(
+                    `Expected 201, got ${response.status}: ${JSON.stringify(
+                        response.body
+                    )}`
+                );
+            }
+
+            secondUsername = response.body.data.username;
+
+            const cookies = getCookies(response);
+
+            secondAccessTokenCookie = getCookie(cookies, "accessToken");
+
+            const user = await firebaseAuth.getUserByEmail(secondEmail);
+
+            secondFirebaseUid = user.uid;
+        }
+    );
+
+    await test(
+        "PATCH /api/auth/update rejects taken username",
+        async () => {
+            const response = await request(app)
+                .patch("/api/auth/update")
+                .set("Cookie", accessTokenCookie)
+                .send({ username: secondUsername });
+
+            if (response.status !== 409) {
+                throw new Error(
+                    `Expected 409, got ${response.status}: ${JSON.stringify(
+                        response.body
+                    )}`
+                );
+            }
+
+            if (response.body.error?.code !== "USERNAME_TAKEN") {
+                throw new Error(
+                    `Expected USERNAME_TAKEN, got ${response.body.error?.code}`
+                );
+            }
+        }
+    );
+
+    await test(
+        "PATCH /api/auth/update rejects taken email",
+        async () => {
+            const response = await request(app)
+                .patch("/api/auth/update")
+                .set("Cookie", accessTokenCookie)
+                .send({ email: secondEmail });
+
+            if (response.status !== 409) {
+                throw new Error(
+                    `Expected 409, got ${response.status}: ${JSON.stringify(
+                        response.body
+                    )}`
+                );
+            }
+
+            if (response.body.error?.code !== "EMAIL_TAKEN") {
+                throw new Error(
+                    `Expected EMAIL_TAKEN, got ${response.body.error?.code}`
+                );
+            }
+        }
+    );
+
+    await test(
+        "POST /api/auth/refresh rejects request without refresh token",
+        async () => {
+            const response = await request(app).post("/api/auth/refresh");
 
             if (response.status !== 401) {
                 throw new Error(
@@ -392,10 +528,7 @@ try {
         async () => {
             const response = await request(app)
                 .post("/api/auth/refresh")
-                .set(
-                    "Cookie",
-                    "refreshToken=invalid-refresh-token"
-                );
+                .set("Cookie", "refreshToken=invalid-refresh-token");
 
             if (response.status !== 401) {
                 throw new Error(
@@ -415,17 +548,12 @@ try {
         "POST /api/auth/refresh creates new access token",
         async () => {
             if (!refreshTokenCookie) {
-                throw new Error(
-                    "No refresh token cookie available"
-                );
+                throw new Error("No refresh token cookie available");
             }
 
             const response = await request(app)
                 .post("/api/auth/refresh")
-                .set(
-                    "Cookie",
-                    refreshTokenCookie
-                );
+                .set("Cookie", refreshTokenCookie);
 
             if (response.status !== 200) {
                 throw new Error(
@@ -443,15 +571,8 @@ try {
 
             const cookies = getCookies(response);
 
-            accessTokenCookie = getCookie(
-                cookies,
-                "accessToken"
-            );
-
-            refreshTokenCookie = getCookie(
-                cookies,
-                "refreshToken"
-            );
+            accessTokenCookie = getCookie(cookies, "accessToken");
+            refreshTokenCookie = getCookie(cookies, "refreshToken");
         }
     );
 
@@ -466,10 +587,7 @@ try {
 
             const response = await request(app)
                 .get("/api/auth/me")
-                .set(
-                    "Cookie",
-                    accessTokenCookie
-                );
+                .set("Cookie", accessTokenCookie);
 
             if (response.status !== 200) {
                 throw new Error(
@@ -485,10 +603,7 @@ try {
                 );
             }
 
-            if (
-                response.body.data.firebase_uid !==
-                firebaseUid
-            ) {
+            if (response.body.data.firebase_uid !== firebaseUid) {
                 throw new Error(
                     "Incorrect Firebase UID after refresh"
                 );
@@ -500,20 +615,14 @@ try {
         "POST /api/auth/refresh rotates refresh token",
         async () => {
             if (!refreshTokenCookie) {
-                throw new Error(
-                    "No refresh token cookie available"
-                );
+                throw new Error("No refresh token cookie available");
             }
 
-            const oldRefreshToken =
-                refreshTokenCookie;
+            const oldRefreshToken = refreshTokenCookie;
 
             const response = await request(app)
                 .post("/api/auth/refresh")
-                .set(
-                    "Cookie",
-                    refreshTokenCookie
-                );
+                .set("Cookie", refreshTokenCookie);
 
             if (response.status !== 200) {
                 throw new Error(
@@ -523,41 +632,19 @@ try {
 
             const cookies = getCookies(response);
 
-            const newAccessTokenCookie =
-                getCookie(
-                    cookies,
-                    "accessToken"
-                );
+            const newAccessTokenCookie = getCookie(cookies, "accessToken");
+            const newRefreshTokenCookie = getCookie(cookies, "refreshToken");
 
-            const newRefreshTokenCookie =
-                getCookie(
-                    cookies,
-                    "refreshToken"
-                );
-
-            if (
-                newAccessTokenCookie ===
-                accessTokenCookie
-            ) {
-                throw new Error(
-                    "Access token was not refreshed"
-                );
+            if (newAccessTokenCookie === accessTokenCookie) {
+                throw new Error("Access token was not refreshed");
             }
 
-            if (
-                newRefreshTokenCookie ===
-                oldRefreshToken
-            ) {
-                throw new Error(
-                    "Refresh token was not rotated"
-                );
+            if (newRefreshTokenCookie === oldRefreshToken) {
+                throw new Error("Refresh token was not rotated");
             }
 
-            accessTokenCookie =
-                newAccessTokenCookie;
-
-            refreshTokenCookie =
-                newRefreshTokenCookie;
+            accessTokenCookie = newAccessTokenCookie;
+            refreshTokenCookie = newRefreshTokenCookie;
         }
     );
 
@@ -566,10 +653,7 @@ try {
         async () => {
             const response = await request(app)
                 .get("/api/auth/me")
-                .set(
-                    "Cookie",
-                    accessTokenCookie
-                );
+                .set("Cookie", accessTokenCookie);
 
             if (response.status !== 200) {
                 throw new Error(
@@ -590,13 +674,7 @@ try {
         async () => {
             const response = await request(app)
                 .post("/api/auth/logout")
-                .set(
-                    "Cookie",
-                    [
-                        accessTokenCookie,
-                        refreshTokenCookie,
-                    ]
-                );
+                .set("Cookie", [accessTokenCookie, refreshTokenCookie]);
 
             if (response.status !== 200) {
                 throw new Error(
@@ -618,19 +696,13 @@ try {
 
             const cookies = getCookies(response);
 
-            const accessCookie =
-                cookies.find((cookie) =>
-                    cookie.startsWith(
-                        "accessToken="
-                    )
-                );
+            const accessCookie = cookies.find((cookie) =>
+                cookie.startsWith("accessToken=")
+            );
 
-            const refreshCookie =
-                cookies.find((cookie) =>
-                    cookie.startsWith(
-                        "refreshToken="
-                    )
-                );
+            const refreshCookie = cookies.find((cookie) =>
+                cookie.startsWith("refreshToken=")
+            );
 
             if (!accessCookie) {
                 throw new Error(
@@ -654,10 +726,7 @@ try {
         async () => {
             const response = await request(app)
                 .get("/api/auth/me")
-                .set(
-                    "Cookie",
-                    accessTokenCookie
-                );
+                .set("Cookie", accessTokenCookie);
 
             if (response.status !== 401) {
                 throw new Error(
@@ -678,10 +747,7 @@ try {
         async () => {
             const response = await request(app)
                 .post("/api/auth/refresh")
-                .set(
-                    "Cookie",
-                    refreshTokenCookie
-                );
+                .set("Cookie", refreshTokenCookie);
 
             if (response.status !== 401) {
                 throw new Error(
@@ -699,18 +765,22 @@ try {
 } finally {
     if (firebaseUid) {
         try {
-            await firebaseAuth.deleteUser(
-                firebaseUid
-            );
+            await firebaseAuth.deleteUser(firebaseUid);
+        } catch (error) {
+            console.error("Firebase test user cleanup failed:", error);
+        }
+    }
+
+    if (secondFirebaseUid) {
+        try {
+            await firebaseAuth.deleteUser(secondFirebaseUid);
         } catch (error) {
             console.error(
-                "Firebase test user cleanup failed:",
+                "Firebase second test user cleanup failed:",
                 error
             );
         }
     }
 
-    console.log(
-        "\nAuth tests completed.\n"
-    );
+    console.log("\nAuth tests completed.\n");
 }
