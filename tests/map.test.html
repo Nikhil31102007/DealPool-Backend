@@ -18,16 +18,32 @@
       font-size: 13px;
     }
     #controls input { width: 220px; margin-right: 6px; }
+    #controls button { margin-top: 6px; }
     #map { height:100%; }
+    #gpsStatus {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      z-index: 1000;
+      background: rgba(0,0,0,0.7);
+      color: #0f0;
+      font-family: monospace;
+      font-size: 11px;
+      padding: 5px 10px;
+      border-radius: 4px;
+    }
   </style>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
 </head>
 <body>
   <div id="controls">
-    API Base: <input id="apiBase" value="http://localhost:3000">
+    API Base: <input id="apiBase" value="http://localhost:3000"><br>
     <button id="reload">Reload Deals</button>
+    <button id="toggleGps">📍 Start Live GPS</button>
   </div>
   <div id="map"></div>
+  <div id="gpsStatus">GPS: off</div>
+
   <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
   <script>
     const map = L.map('map').setView([37.7749, -122.4194], 13);
@@ -70,6 +86,93 @@
     document.getElementById('reload').addEventListener('click', loadDeals);
 
     loadDeals();
+
+    // ---- Live GPS tracking ----
+    let gpsWatchId = null;
+    let gpsMarker = null;
+    let gpsAccuracyCircle = null;
+    const gpsStatus = document.getElementById('gpsStatus');
+    const toggleGpsBtn = document.getElementById('toggleGps');
+
+    function startLiveGps() {
+      if (!navigator.geolocation) {
+        alert('Geolocation is not supported by this browser.');
+        return;
+      }
+
+      gpsStatus.textContent = 'GPS: requesting permission...';
+
+      gpsWatchId = navigator.geolocation.watchPosition(
+        (pos) => {
+          const { latitude, longitude, accuracy } = pos.coords;
+
+          gpsStatus.textContent = `GPS: ${latitude.toFixed(5)}, ${longitude.toFixed(5)} (±${Math.round(accuracy)}m)`;
+
+          if (!gpsMarker) {
+            gpsMarker = L.circleMarker([latitude, longitude], {
+              radius: 8,
+              color: '#fff',
+              weight: 2,
+              fillColor: '#2563eb',
+              fillOpacity: 1,
+            }).addTo(map).bindPopup('You are here');
+
+            gpsAccuracyCircle = L.circle([latitude, longitude], {
+              radius: accuracy,
+              color: '#2563eb',
+              fillColor: '#2563eb',
+              fillOpacity: 0.1,
+              weight: 1,
+            }).addTo(map);
+
+            map.setView([latitude, longitude], 15);
+          } else {
+            gpsMarker.setLatLng([latitude, longitude]);
+            gpsAccuracyCircle.setLatLng([latitude, longitude]);
+            gpsAccuracyCircle.setRadius(accuracy);
+          }
+        },
+        (err) => {
+          console.error('GPS error:', err);
+          gpsStatus.textContent = `GPS: error — ${err.message}`;
+        },
+        {
+          enableHighAccuracy: true,
+          maximumAge: 0,
+          timeout: 15000,
+        }
+      );
+
+      toggleGpsBtn.textContent = '🛑 Stop Live GPS';
+    }
+
+    function stopLiveGps() {
+      if (gpsWatchId !== null) {
+        navigator.geolocation.clearWatch(gpsWatchId);
+        gpsWatchId = null;
+      }
+
+      if (gpsMarker) {
+        map.removeLayer(gpsMarker);
+        gpsMarker = null;
+      }
+
+      if (gpsAccuracyCircle) {
+        map.removeLayer(gpsAccuracyCircle);
+        gpsAccuracyCircle = null;
+      }
+
+      gpsStatus.textContent = 'GPS: off';
+      toggleGpsBtn.textContent = '📍 Start Live GPS';
+    }
+
+    toggleGpsBtn.addEventListener('click', () => {
+      if (gpsWatchId === null) {
+        startLiveGps();
+      } else {
+        stopLiveGps();
+      }
+    });
   </script>
 </body>
 </html>

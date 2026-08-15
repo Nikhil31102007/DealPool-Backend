@@ -632,9 +632,10 @@
                         </div>
                         <div class="form-group">
                             <label>Latitude & Longitude</label>
-                            <div style="display: flex; gap: 8px;">
+                            <div style="display: flex; gap: 8px; align-items: center;">
                                 <input type="number" id="dealLat" step="0.0001" value="37.7749">
                                 <input type="number" id="dealLng" step="0.0001" value="-122.4194">
+                                <button type="button" class="btn-secondary" style="padding: 6px 10px; font-size: 12px; white-space: nowrap;" id="dealGpsToggle" onclick="toggleLiveGps('dealLat', 'dealLng', 'dealGpsToggle')">📍 Live GPS</button>
                             </div>
                         </div>
                         <div class="form-group">
@@ -706,9 +707,10 @@
                         </div>
                         <div class="form-group">
                             <label>Coordinates (Lat, Lng)</label>
-                            <div style="display: flex; gap: 8px;">
+                            <div style="display: flex; gap: 8px; align-items: center;">
                                 <input type="number" id="resLat" step="0.0001" value="37.7749">
                                 <input type="number" id="resLng" step="0.0001" value="-122.4194">
+                                <button type="button" class="btn-secondary" style="padding: 6px 10px; font-size: 12px; white-space: nowrap;" id="resGpsToggle" onclick="toggleLiveGps('resLat', 'resLng', 'resGpsToggle')">📍 Live GPS</button>
                             </div>
                         </div>
                     </div>
@@ -917,6 +919,50 @@
                 logResponse(options.method || 'GET', path, 0, { error: err.message });
                 throw err;
             }
+        }
+
+        // ---- Live GPS (used by the "📍 Live GPS" toggle buttons on Deals and Resources forms) ----
+        const activeGpsWatches = {};
+
+        function toggleLiveGps(latFieldId, lngFieldId, buttonId) {
+            const button = document.getElementById(buttonId);
+
+            if (activeGpsWatches[buttonId] != null) {
+                navigator.geolocation.clearWatch(activeGpsWatches[buttonId]);
+                delete activeGpsWatches[buttonId];
+                button.textContent = '📍 Live GPS';
+                button.classList.remove('btn-success');
+                button.classList.add('btn-secondary');
+                return;
+            }
+
+            if (!navigator.geolocation) {
+                alert('Geolocation is not supported by this browser.');
+                return;
+            }
+
+            button.textContent = '⏳ Requesting...';
+
+            const watchId = navigator.geolocation.watchPosition(
+                (pos) => {
+                    document.getElementById(latFieldId).value = pos.coords.latitude.toFixed(6);
+                    document.getElementById(lngFieldId).value = pos.coords.longitude.toFixed(6);
+                    button.textContent = '🛑 Stop GPS';
+                    button.classList.remove('btn-secondary');
+                    button.classList.add('btn-success');
+                },
+                (err) => {
+                    console.error('Geolocation error:', err);
+                    alert(`Could not get location: ${err.message}`);
+                    delete activeGpsWatches[buttonId];
+                    button.textContent = '📍 Live GPS';
+                    button.classList.remove('btn-success');
+                    button.classList.add('btn-secondary');
+                },
+                { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
+            );
+
+            activeGpsWatches[buttonId] = watchId;
         }
 
         async function apiRegister() {
