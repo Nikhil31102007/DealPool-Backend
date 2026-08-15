@@ -670,6 +670,200 @@ try {
     );
 
     await test(
+        "PATCH /api/auth/change-password rejects unauthenticated request",
+        async () => {
+            const response = await request(app)
+                .patch("/api/auth/change-password")
+                .send({
+                    currentPassword: password,
+                    newPassword: "NewTestPassword123!",
+                });
+
+            if (response.status !== 401) {
+                throw new Error(
+                    `Expected 401, got ${response.status}`
+                );
+            }
+
+            if (response.body.success !== false) {
+                throw new Error(
+                    "Expected success to be false"
+                );
+            }
+        }
+    );
+
+    await test(
+        "PATCH /api/auth/change-password rejects missing current or new password",
+        async () => {
+            const response = await request(app)
+                .patch("/api/auth/change-password")
+                .set("Cookie", accessTokenCookie)
+                .send({
+                    currentPassword: password,
+                });
+
+            if (response.status !== 400) {
+                throw new Error(
+                    `Expected 400, got ${response.status}: ${JSON.stringify(
+                        response.body
+                    )}`
+                );
+            }
+
+            if (response.body.error?.code !== "INVALID_CREDENTIALS") {
+                throw new Error(
+                    `Expected INVALID_CREDENTIALS, got ${response.body.error?.code}`
+                );
+            }
+        }
+    );
+
+    await test(
+        "PATCH /api/auth/change-password rejects new password shorter than 6 characters",
+        async () => {
+            const response = await request(app)
+                .patch("/api/auth/change-password")
+                .set("Cookie", accessTokenCookie)
+                .send({
+                    currentPassword: password,
+                    newPassword: "123",
+                });
+
+            if (response.status !== 400) {
+                throw new Error(
+                    `Expected 400, got ${response.status}: ${JSON.stringify(
+                        response.body
+                    )}`
+                );
+            }
+
+            if (response.body.error?.code !== "WEAK_PASSWORD") {
+                throw new Error(
+                    `Expected WEAK_PASSWORD, got ${response.body.error?.code}`
+                );
+            }
+        }
+    );
+
+    await test(
+        "PATCH /api/auth/change-password rejects incorrect current password",
+        async () => {
+            const response = await request(app)
+                .patch("/api/auth/change-password")
+                .set("Cookie", accessTokenCookie)
+                .send({
+                    currentPassword: "WrongCurrentPassword123!",
+                    newPassword: "NewTestPassword123!",
+                });
+
+            if (response.status !== 401) {
+                throw new Error(
+                    `Expected 401, got ${response.status}: ${JSON.stringify(
+                        response.body
+                    )}`
+                );
+            }
+
+            if (response.body.error?.code !== "INVALID_CREDENTIALS") {
+                throw new Error(
+                    `Expected INVALID_CREDENTIALS, got ${response.body.error?.code}`
+                );
+            }
+        }
+    );
+
+    const newPassword = "NewTestPassword123!";
+
+    await test(
+        "PATCH /api/auth/change-password changes password successfully",
+        async () => {
+            const response = await request(app)
+                .patch("/api/auth/change-password")
+                .set("Cookie", accessTokenCookie)
+                .send({
+                    currentPassword: password,
+                    newPassword,
+                });
+
+            if (response.status !== 200) {
+                throw new Error(
+                    `Expected 200, got ${response.status}: ${JSON.stringify(
+                        response.body
+                    )}`
+                );
+            }
+
+            if (response.body.success !== true) {
+                throw new Error(
+                    "Expected success to be true"
+                );
+            }
+
+            if (response.body.data !== null) {
+                throw new Error(
+                    "Expected data to be null"
+                );
+            }
+        }
+    );
+
+    await test(
+        "POST /api/auth/login fails with old password after change",
+        async () => {
+            const response = await request(app)
+                .post("/api/auth/login")
+                .send({
+                    email,
+                    password,
+                });
+
+            if (response.status !== 401) {
+                throw new Error(
+                    `Expected 401, got ${response.status}`
+                );
+            }
+
+            if (response.body.success !== false) {
+                throw new Error(
+                    "Expected success to be false"
+                );
+            }
+        }
+    );
+
+    await test(
+        "POST /api/auth/login succeeds with new password after change",
+        async () => {
+            const response = await request(app)
+                .post("/api/auth/login")
+                .send({
+                    email,
+                    password: newPassword,
+                });
+
+            if (response.status !== 200) {
+                throw new Error(
+                    `Expected 200, got ${response.status}: ${JSON.stringify(
+                        response.body
+                    )}`
+                );
+            }
+
+            if (response.body.success !== true) {
+                throw new Error(
+                    "Expected success to be true"
+                );
+            }
+
+            const cookies = getCookies(response);
+
+            accessTokenCookie = getCookie(cookies, "accessToken");
+            refreshTokenCookie = getCookie(cookies, "refreshToken");
+        }
+    );
+
+    await test(
         "POST /api/auth/logout clears access and refresh cookies",
         async () => {
             const response = await request(app)

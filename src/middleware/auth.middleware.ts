@@ -35,7 +35,8 @@ export const authMiddleware = async (
         }
 
         req.user = {
-            uid: decoded.uid,
+            uid: profile.id,
+            firebaseUid: decoded.uid,
             email: decoded.email,
             role: profile.role,
         };

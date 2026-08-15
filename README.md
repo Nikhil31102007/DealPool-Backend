@@ -114,6 +114,21 @@ Protected. Body — all fields optional, send only what changes:
 
 `role`, `avg_rating`, `rating_count` are silently ignored if sent — they're not in the updatable field set.
 
+### `PATCH /api/auth/change-password`
+
+Protected. Body:
+```json
+{
+    "currentPassword": "oldPassword123",
+    "newPassword": "newPassword123"
+}
+```
+- `200` — password updated successfully, returns `{ "success": true, "data": null }`.
+- `400 INVALID_CREDENTIALS` — missing `currentPassword` or `newPassword`.
+- `400 WEAK_PASSWORD` — new password is shorter than 6 characters.
+- `401 INVALID_CREDENTIALS` — current password is incorrect.
+- `401 UNAUTHORIZED` — not authenticated.
+
 ---
 
 ## Admin routes — `/api/admin`
@@ -162,7 +177,8 @@ Deletes the profile row.
 
 | Code                  | HTTP | Meaning                                      |
 |-----------------------|------|-----------------------------------------------|
-| INVALID_CREDENTIALS   | 401  | Missing/wrong email or password               |
+| INVALID_CREDENTIALS   | 401 / 400 | Missing/wrong credentials or current password |
+| WEAK_PASSWORD         | 400  | New password is shorter than 6 characters     |
 | UNAUTHORIZED          | 401  | Missing/invalid token, or no profile          |
 | INVALID_TOKEN         | 401  | Bad Firebase ID token                         |
 | INVALID_REFRESH_TOKEN | 401  | Missing/invalid/expired refresh token         |

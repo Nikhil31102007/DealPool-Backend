@@ -1,0 +1,1241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DealPool — Unified Testing & Debugging Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0b0f17;
+            --bg-surface: #111827;
+            --bg-surface-elevated: #1a2234;
+            --border-subtle: #243049;
+            --border-focus: #3b82f6;
+            --text-primary: #f3f4f6;
+            --text-secondary: #9ca3af;
+            --text-muted: #6b7280;
+            --accent-blue: #3b82f6;
+            --accent-green: #10b981;
+            --accent-amber: #f59e0b;
+            --accent-red: #ef4444;
+            --accent-purple: #8b5cf6;
+            --radius-md: 8px;
+            --radius-lg: 12px;
+            --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: var(--font-sans);
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.5;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        header {
+            background-color: var(--bg-surface);
+            border-bottom: 1px solid var(--border-subtle);
+            padding: 16px 28px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .brand-badge {
+            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+            color: white;
+            font-weight: 800;
+            font-size: 14px;
+            padding: 4px 10px;
+            border-radius: var(--radius-md);
+            letter-spacing: 0.5px;
+        }
+
+        .brand h1 {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text-primary);
+            letter-spacing: -0.3px;
+        }
+
+        .api-base-bar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+        }
+
+        .api-base-bar input {
+            background-color: var(--bg-surface-elevated);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            color: var(--text-primary);
+            font-family: var(--font-mono);
+            font-size: 12.5px;
+            padding: 6px 10px;
+            width: 220px;
+            outline: none;
+        }
+
+        .api-base-bar input:focus {
+            border-color: var(--border-focus);
+        }
+
+        .auth-status-bar {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            font-size: 13px;
+        }
+
+        .status-pill {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--bg-surface-elevated);
+            padding: 6px 12px;
+            border-radius: 9999px;
+            border: 1px solid var(--border-subtle);
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent-red);
+        }
+
+        .dot.online {
+            background: var(--accent-green);
+        }
+
+        .layout-container {
+            display: grid;
+            grid-template-columns: 240px 1fr 420px;
+            flex: 1;
+            height: calc(100vh - 65px);
+            overflow: hidden;
+        }
+
+        .sidebar {
+            background-color: var(--bg-surface);
+            border-right: 1px solid var(--border-subtle);
+            padding: 18px 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            overflow-y: auto;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 14px;
+            border-radius: var(--radius-md);
+            color: var(--text-secondary);
+            font-weight: 600;
+            font-size: 13.5px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            border: 1px solid transparent;
+        }
+
+        .nav-item:hover {
+            color: var(--text-primary);
+            background-color: var(--bg-surface-elevated);
+        }
+
+        .nav-item.active {
+            color: white;
+            background-color: #1e3a8a;
+            border-color: #2563eb;
+        }
+
+        .nav-divider {
+            height: 1px;
+            background-color: var(--border-subtle);
+            margin: 8px 6px;
+        }
+
+        .workspace {
+            padding: 24px 32px;
+            overflow-y: auto;
+            background-color: var(--bg-primary);
+        }
+
+        .panel {
+            display: none;
+            flex-direction: column;
+            gap: 20px;
+            max-width: 820px;
+        }
+
+        .panel.active {
+            display: flex;
+        }
+
+        .panel-header {
+            margin-bottom: 8px;
+        }
+
+        .panel-header h2 {
+            font-size: 22px;
+            font-weight: 700;
+            letter-spacing: -0.4px;
+        }
+
+        .panel-header p {
+            color: var(--text-secondary);
+            font-size: 14px;
+            margin-top: 4px;
+        }
+
+        .card {
+            background-color: var(--bg-surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .card h3 {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 14px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .form-group.full-width {
+            grid-column: 1 / -1;
+        }
+
+        label {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+        }
+
+        input, select, textarea {
+            background-color: var(--bg-primary);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 13.5px;
+            padding: 9px 12px;
+            outline: none;
+            transition: border-color 0.15s;
+        }
+
+        input:focus, select:focus, textarea:focus {
+            border-color: var(--border-focus);
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 80px;
+            font-family: var(--font-mono);
+            font-size: 12.5px;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 4px;
+        }
+
+        button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 9px 16px;
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: 600;
+            border-radius: var(--radius-md);
+            border: 1px solid transparent;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .btn-primary {
+            background-color: #2563eb;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: #1d4ed8;
+        }
+
+        .btn-secondary {
+            background-color: var(--bg-surface-elevated);
+            color: var(--text-primary);
+            border-color: var(--border-subtle);
+        }
+
+        .btn-secondary:hover {
+            background-color: #243049;
+        }
+
+        .btn-danger {
+            background-color: rgba(239, 68, 68, 0.15);
+            color: var(--accent-red);
+            border-color: rgba(239, 68, 68, 0.3);
+        }
+
+        .btn-danger:hover {
+            background-color: rgba(239, 68, 68, 0.25);
+        }
+
+        .btn-success {
+            background-color: #059669;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background-color: #047857;
+        }
+
+        .inspector {
+            background-color: var(--bg-surface);
+            border-left: 1px solid var(--border-subtle);
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+
+        .inspector-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border-subtle);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .inspector-header h3 {
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        .inspector-logs {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            font-family: var(--font-mono);
+            font-size: 12px;
+        }
+
+        .log-entry {
+            background: var(--bg-primary);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .log-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-weight: 600;
+        }
+
+        .badge-status {
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 11px;
+        }
+
+        .badge-2xx { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+        .badge-4xx { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+        .badge-5xx { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+
+        .log-body {
+            white-space: pre-wrap;
+            word-break: break-all;
+            color: #d1d5db;
+            max-height: 240px;
+            overflow-y: auto;
+            background: #06090e;
+            padding: 8px;
+            border-radius: 4px;
+        }
+
+        .chain-timeline {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            position: relative;
+            padding-left: 20px;
+        }
+
+        .chain-timeline::before {
+            content: '';
+            position: absolute;
+            left: 6px;
+            top: 10px;
+            bottom: 10px;
+            width: 2px;
+            background-color: var(--border-subtle);
+        }
+
+        .chain-node {
+            position: relative;
+            background: var(--bg-primary);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            padding: 12px 16px;
+        }
+
+        .chain-node::before {
+            content: '';
+            position: absolute;
+            left: -18px;
+            top: 18px;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--accent-blue);
+            border: 2px solid var(--bg-surface);
+        }
+
+        .chain-node.redacted::before {
+            background: var(--text-muted);
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="brand">
+            <span class="brand-badge">API TESTER</span>
+            <h1>DealPool Interactive Workbench</h1>
+        </div>
+        <div class="api-base-bar">
+            <label style="text-transform:none; color: var(--text-secondary); font-weight:600;">API Base</label>
+            <input type="text" id="apiBaseInput" value="http://localhost:3000">
+            <button class="btn-secondary" style="padding: 6px 10px; font-size: 12px;" onclick="saveApiBase()">Set</button>
+        </div>
+        <div class="auth-status-bar">
+            <div class="status-pill">
+                <span class="dot" id="authDot"></span>
+                <span id="authStatusText">Not Authenticated</span>
+            </div>
+            <span id="activeUserBadge" style="color: var(--text-secondary); font-family: var(--font-mono);"></span>
+        </div>
+    </header>
+
+    <div class="layout-container">
+        <div class="sidebar">
+            <div class="nav-item active" onclick="switchTab('auth')">🔐 Auth & Session</div>
+            <div class="nav-item" onclick="switchTab('admin')">👑 Admin Operations</div>
+            <div class="nav-divider"></div>
+            <div class="nav-item" onclick="switchTab('deals')">🤝 Deals & Proximity</div>
+            <div class="nav-item" onclick="switchTab('resources')">📦 Resources & Chain</div>
+            <div class="nav-item" onclick="switchTab('skills')">⚡ Skills Directory</div>
+            <div class="nav-divider"></div>
+            <div class="nav-item" onclick="switchTab('offers')">💬 Offers Negotiation</div>
+            <div class="nav-item" onclick="switchTab('transactions')">📜 Custody Transactions</div>
+            <div class="nav-divider"></div>
+            <div class="nav-item" onclick="switchTab('automated')">🧪 Automated Runner</div>
+        </div>
+
+        <div class="workspace">
+
+            <div id="panel-auth" class="panel active">
+                <div class="panel-header">
+                    <h2>Authentication & Identity</h2>
+                    <p>Firebase authentication, cookie-based session verification, and profile management.</p>
+                </div>
+
+                <div class="card">
+                    <h3>Register New User</h3>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Email</label>
+                            <input type="email" id="regEmail" placeholder="user@example.com">
+                        </div>
+                        <div class="form-group">
+                            <label>Password</label>
+                            <input type="password" id="regPassword" placeholder="Min 6 characters" value="TestPassword123!">
+                        </div>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn-primary" onclick="apiRegister()">Register</button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3>Login Existing User</h3>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Email</label>
+                            <input type="email" id="loginEmail" placeholder="user@example.com">
+                        </div>
+                        <div class="form-group">
+                            <label>Password</label>
+                            <input type="password" id="loginPassword" value="TestPassword123!">
+                        </div>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn-primary" onclick="apiLogin()">Login</button>
+                        <button class="btn-secondary" onclick="apiGetMe()">GET /me</button>
+                        <button class="btn-secondary" onclick="apiRefresh()">Rotate Token (Refresh)</button>
+                        <button class="btn-danger" onclick="apiLogout()">Logout</button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3>Update Profile & Password</h3>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>New Username</label>
+                            <input type="text" id="upUsername" placeholder="e.g. quantum_falcon_99">
+                        </div>
+                        <div class="form-group">
+                            <label>Profile Photo URL</label>
+                            <input type="text" id="upPhoto" placeholder="https://...">
+                        </div>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn-secondary" onclick="apiUpdateProfile()">Update Profile</button>
+                    </div>
+
+                    <div class="form-grid" style="margin-top: 12px;">
+                        <div class="form-group">
+                            <label>Current Password</label>
+                            <input type="password" id="chgOldPass" value="TestPassword123!">
+                        </div>
+                        <div class="form-group">
+                            <label>New Password</label>
+                            <input type="password" id="chgNewPass" placeholder="New strong password">
+                        </div>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn-secondary" onclick="apiChangePassword()">Change Password</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="panel-admin" class="panel">
+                <div class="panel-header">
+                    <h2>Admin Operations</h2>
+                    <p>Protected by requireRole("admin"). List profiles, promote/demote roles, delete profiles.</p>
+                </div>
+
+                <div class="card">
+                    <h3>User Directory (Admin Only)</h3>
+                    <div class="btn-group">
+                        <button class="btn-primary" onclick="apiListUsers()">List All Users (GET /api/admin/users)</button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3>Manage Specific User</h3>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Target Profile UUID</label>
+                            <input type="text" id="adminTargetId" placeholder="UUID from profile">
+                        </div>
+                        <div class="form-group">
+                            <label>Role</label>
+                            <select id="adminTargetRole">
+                                <option value="user">user</option>
+                                <option value="admin">admin</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn-secondary" onclick="apiGetSingleUser()">Get Profile</button>
+                        <button class="btn-primary" onclick="apiUpdateRole()">Update Role</button>
+                        <button class="btn-danger" onclick="apiDeleteUser()">Delete Profile</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="panel-deals" class="panel">
+                <div class="panel-header">
+                    <h2>Deals Marketplace</h2>
+                    <p>Post requests for resources or skills, and query geospatial nearby deals via PostGIS.</p>
+                </div>
+
+                <div class="card">
+                    <h3>Create New Deal</h3>
+                    <div class="form-grid">
+                        <div class="form-group full-width">
+                            <label>Title</label>
+                            <input type="text" id="dealTitle" placeholder="Need 3D printer for 2 days">
+                        </div>
+                        <div class="form-group full-width">
+                            <label>Description</label>
+                            <textarea id="dealDesc" placeholder="Description of the requirement..."></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>Category</label>
+                            <input type="text" id="dealCategory" placeholder="e.g. Tools / 3D Printing">
+                        </div>
+                        <div class="form-group">
+                            <label>Budget Range (Min - Max)</label>
+                            <div style="display: flex; gap: 8px;">
+                                <input type="number" id="dealBudgetMin" placeholder="Min">
+                                <input type="number" id="dealBudgetMax" placeholder="Max">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Latitude & Longitude</label>
+                            <div style="display: flex; gap: 8px;">
+                                <input type="number" id="dealLat" step="0.0001" value="37.7749">
+                                <input type="number" id="dealLng" step="0.0001" value="-122.4194">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Radius (KM)</label>
+                            <input type="number" id="dealRadius" value="10">
+                        </div>
+                        <div class="form-group">
+                            <label>Link Resource ID (Optional)</label>
+                            <input type="text" id="dealResourceId" placeholder="Resource UUID">
+                        </div>
+                        <div class="form-group">
+                            <label>Link Skill ID (Optional)</label>
+                            <input type="text" id="dealSkillId" placeholder="Skill UUID">
+                        </div>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn-primary" onclick="apiCreateDeal()">Create Deal</button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3>Query Deals</h3>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Category Filter</label>
+                            <input type="text" id="filterCategory" placeholder="All categories">
+                        </div>
+                        <div class="form-group">
+                            <label>Status Filter</label>
+                            <select id="filterStatus">
+                                <option value="">All Statuses</option>
+                                <option value="open">open</option>
+                                <option value="offer_accepted">offer_accepted</option>
+                                <option value="completed">completed</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn-secondary" onclick="apiListDeals()">List Deals (GET /api/deals)</button>
+                        <button class="btn-secondary" onclick="apiListNearbyDeals()">Nearby Deals (GET /api/deals/nearby)</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="panel-resources" class="panel">
+                <div class="panel-header">
+                    <h2>Resources & Custody Tracking</h2>
+                    <p>Physical items that chain across users. Track owner, current holder, and custody provenance.</p>
+                </div>
+
+                <div class="card">
+                    <h3>Register Physical Resource</h3>
+                    <div class="form-grid">
+                        <div class="form-group full-width">
+                            <label>Title</label>
+                            <input type="text" id="resTitle" placeholder="Sony A7 IV Camera Kit">
+                        </div>
+                        <div class="form-group full-width">
+                            <label>Description</label>
+                            <textarea id="resDesc" placeholder="Condition details, included accessories..."></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>Category</label>
+                            <input type="text" id="resCategory" placeholder="Photography">
+                        </div>
+                        <div class="form-group">
+                            <label>Condition</label>
+                            <input type="text" id="resCondition" placeholder="Excellent / Like New">
+                        </div>
+                        <div class="form-group">
+                            <label>Coordinates (Lat, Lng)</label>
+                            <div style="display: flex; gap: 8px;">
+                                <input type="number" id="resLat" step="0.0001" value="37.7749">
+                                <input type="number" id="resLng" step="0.0001" value="-122.4194">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn-primary" onclick="apiCreateResource()">Register Resource</button>
+                        <button class="btn-secondary" onclick="apiListMyResources()">My Resources (/mine)</button>
+                        <button class="btn-secondary" onclick="apiListNearbyResources()">Nearby Resources (/nearby)</button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3>Inspect Custody Chain & Provenance</h3>
+                    <div class="form-grid">
+                        <div class="form-group full-width">
+                            <label>Resource UUID</label>
+                            <input type="text" id="chainResId" placeholder="Enter resource ID to trace chain">
+                        </div>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn-primary" onclick="apiGetResourceChain()">View Custody Chain (GET /:resourceId/chain)</button>
+                    </div>
+                    <div id="chainTimelineContainer" style="margin-top: 16px;"></div>
+                </div>
+            </div>
+
+            <div id="panel-skills" class="panel">
+                <div class="panel-header">
+                    <h2>Skills & Services</h2>
+                    <p>One-off capabilities and services (no multi-hop custody chaining).</p>
+                </div>
+
+                <div class="card">
+                    <h3>Register Skill</h3>
+                    <div class="form-grid">
+                        <div class="form-group full-width">
+                            <label>Skill Name</label>
+                            <input type="text" id="skillName" placeholder="React & Node.js Code Review">
+                        </div>
+                        <div class="form-group full-width">
+                            <label>Description</label>
+                            <textarea id="skillDesc" placeholder="Details of the skill offered..."></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>Category</label>
+                            <input type="text" id="skillCategory" placeholder="Software Engineering">
+                        </div>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn-primary" onclick="apiCreateSkill()">Create Skill</button>
+                        <button class="btn-secondary" onclick="apiListMySkills()">My Skills (GET /mine)</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="panel-offers" class="panel">
+                <div class="panel-header">
+                    <h2>Offers & Negotiations</h2>
+                    <p>Respond to open deals, accept proposals atomically with custody transfer, or reject/withdraw.</p>
+                </div>
+
+                <div class="card">
+                    <h3>Submit Offer on Deal</h3>
+                    <div class="form-grid">
+                        <div class="form-group full-width">
+                            <label>Deal ID</label>
+                            <input type="text" id="offerDealId" placeholder="UUID of open deal">
+                        </div>
+                        <div class="form-group">
+                            <label>Price</label>
+                            <input type="number" id="offerPrice" placeholder="500">
+                        </div>
+                        <div class="form-group">
+                            <label>Proposed Terms</label>
+                            <input type="text" id="offerTerms" placeholder="Available this weekend, pickup at 2 PM">
+                        </div>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn-primary" onclick="apiCreateOffer()">Submit Offer (POST /api/deals/:id/offers)</button>
+                        <button class="btn-secondary" onclick="apiListOffersOnDeal()">List Deal Offers (GET /api/deals/:id/offers)</button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3>Accept, Reject or Withdraw Offer</h3>
+                    <div class="form-grid">
+                        <div class="form-group full-width">
+                            <label>Offer UUID</label>
+                            <input type="text" id="targetOfferId" placeholder="Offer UUID">
+                        </div>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn-success" onclick="apiAcceptOffer()">Accept Offer (Atomic Handover)</button>
+                        <button class="btn-danger" onclick="apiRejectOffer()">Reject Offer</button>
+                        <button class="btn-secondary" onclick="apiWithdrawOffer()">Withdraw My Offer</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="panel-transactions" class="panel">
+                <div class="panel-header">
+                    <h2>Transactions</h2>
+                    <p>Detailed transaction lookup with participant authorization check.</p>
+                </div>
+
+                <div class="card">
+                    <h3>Lookup Transaction</h3>
+                    <div class="form-grid">
+                        <div class="form-group full-width">
+                            <label>Transaction UUID</label>
+                            <input type="text" id="txIdInput" placeholder="Transaction UUID">
+                        </div>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn-primary" onclick="apiGetTransaction()">Get Transaction (GET /api/transactions/:id)</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="panel-automated" class="panel">
+                <div class="panel-header">
+                    <h2>Automated End-to-End Test Suite</h2>
+                    <p>Runs a live integration sequence hitting all backend routes in sequence with assertions.</p>
+                </div>
+
+                <div class="card">
+                    <div class="btn-group">
+                        <button class="btn-primary" style="padding: 12px 24px; font-size: 14px;" onclick="runAutomatedSuite()">▶ Run Full End-to-End Suite</button>
+                        <button class="btn-secondary" onclick="clearTestLogs()">Clear Log</button>
+                    </div>
+                    <div id="testSuiteProgress" style="display: flex; flex-direction: column; gap: 8px; margin-top: 14px;"></div>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="inspector">
+            <div class="inspector-header">
+                <h3>Live Network Inspector</h3>
+                <button class="btn-secondary" style="padding: 4px 10px; font-size: 11px;" onclick="clearLogs()">Clear</button>
+            </div>
+            <div class="inspector-logs" id="logsContainer">
+                <div style="color: var(--text-muted); text-align: center; margin-top: 40px;">No requests made yet. Execute an endpoint to inspect payloads.</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let API_BASE = document.getElementById('apiBaseInput').value.replace(/\/$/, "");
+
+        function saveApiBase() {
+            API_BASE = document.getElementById('apiBaseInput').value.replace(/\/$/, "");
+            resetAuthUI();
+            clearLogs();
+        }
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.panel').forEach(el => el.classList.remove('active'));
+
+            const targetNav = Array.from(document.querySelectorAll('.nav-item')).find(el => el.getAttribute('onclick')?.includes(`'${tabId}'`));
+            if (targetNav) targetNav.classList.add('active');
+
+            const targetPanel = document.getElementById(`panel-${tabId}`);
+            if (targetPanel) targetPanel.classList.add('active');
+        }
+
+        function logResponse(method, path, status, data) {
+            const container = document.getElementById('logsContainer');
+            if (container.children.length === 1 && container.children[0].tagName === 'DIV' && container.children[0].style.textAlign === 'center') {
+                container.innerHTML = '';
+            }
+
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+
+            const badgeClass = status >= 200 && status < 300 ? 'badge-2xx' : (status >= 400 && status < 500 ? 'badge-4xx' : 'badge-5xx');
+
+            entry.innerHTML = `
+                <div class="log-header">
+                    <span>${method} ${path}</span>
+                    <span class="badge-status ${badgeClass}">HTTP ${status}</span>
+                </div>
+                <div class="log-body">${JSON.stringify(data, null, 2)}</div>
+            `;
+
+            container.prepend(entry);
+        }
+
+        function clearLogs() {
+            document.getElementById('logsContainer').innerHTML = '<div style="color: var(--text-muted); text-align: center; margin-top: 40px;">No requests made yet.</div>';
+        }
+
+        async function apiFetch(path, options = {}) {
+            options.credentials = 'include';
+            options.headers = {
+                'Content-Type': 'application/json',
+                ...(options.headers || {})
+            };
+
+            try {
+                const res = await fetch(`${API_BASE}${path}`, options);
+                const data = await res.json().catch(() => null);
+                logResponse(options.method || 'GET', path, res.status, data);
+                return { status: res.status, data };
+            } catch (err) {
+                logResponse(options.method || 'GET', path, 0, { error: err.message });
+                throw err;
+            }
+        }
+
+        async function apiRegister() {
+            const email = document.getElementById('regEmail').value;
+            const password = document.getElementById('regPassword').value;
+            const res = await apiFetch('/api/auth/register', {
+                method: 'POST',
+                body: JSON.stringify({ email, password })
+            });
+            if (res.status === 201) updateAuthUI(res.data?.data);
+        }
+
+        async function apiLogin() {
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+            const res = await apiFetch('/api/auth/login', {
+                method: 'POST',
+                body: JSON.stringify({ email, password })
+            });
+            if (res.status === 200) updateAuthUI(res.data?.data);
+        }
+
+        async function apiGetMe() {
+            const res = await apiFetch('/api/auth/me');
+            if (res.status === 200) updateAuthUI(res.data?.data);
+            else resetAuthUI();
+        }
+
+        async function apiRefresh() {
+            await apiFetch('/api/auth/refresh', { method: 'POST' });
+        }
+
+        async function apiLogout() {
+            await apiFetch('/api/auth/logout', { method: 'POST' });
+            resetAuthUI();
+        }
+
+        async function apiUpdateProfile() {
+            const username = document.getElementById('upUsername').value || undefined;
+            const profile_photo = document.getElementById('upPhoto').value || undefined;
+            await apiFetch('/api/auth/update', {
+                method: 'PATCH',
+                body: JSON.stringify({ username, profile_photo })
+            });
+        }
+
+        async function apiChangePassword() {
+            const currentPassword = document.getElementById('chgOldPass').value;
+            const newPassword = document.getElementById('chgNewPass').value;
+            await apiFetch('/api/auth/change-password', {
+                method: 'PATCH',
+                body: JSON.stringify({ currentPassword, newPassword })
+            });
+        }
+
+        function updateAuthUI(profile) {
+            if (!profile) return;
+            document.getElementById('authDot').className = 'dot online';
+            document.getElementById('authStatusText').textContent = `${profile.username} (${profile.role})`;
+            document.getElementById('activeUserBadge').textContent = profile.email;
+        }
+
+        function resetAuthUI() {
+            document.getElementById('authDot').className = 'dot';
+            document.getElementById('authStatusText').textContent = 'Not Authenticated';
+            document.getElementById('activeUserBadge').textContent = '';
+        }
+
+        async function apiListUsers() {
+            await apiFetch('/api/admin/users?limit=50&offset=0');
+        }
+
+        async function apiGetSingleUser() {
+            const id = document.getElementById('adminTargetId').value;
+            await apiFetch(`/api/admin/users/${id}`);
+        }
+
+        async function apiUpdateRole() {
+            const id = document.getElementById('adminTargetId').value;
+            const role = document.getElementById('adminTargetRole').value;
+            await apiFetch(`/api/admin/users/${id}/role`, {
+                method: 'PATCH',
+                body: JSON.stringify({ role })
+            });
+        }
+
+        async function apiDeleteUser() {
+            const id = document.getElementById('adminTargetId').value;
+            await apiFetch(`/api/admin/users/${id}`, { method: 'DELETE' });
+        }
+
+        async function apiCreateDeal() {
+            const title = document.getElementById('dealTitle').value;
+            const description = document.getElementById('dealDesc').value || undefined;
+            const category = document.getElementById('dealCategory').value || undefined;
+            const budgetMin = Number(document.getElementById('dealBudgetMin').value) || undefined;
+            const budgetMax = Number(document.getElementById('dealBudgetMax').value) || undefined;
+            const lat = Number(document.getElementById('dealLat').value);
+            const lng = Number(document.getElementById('dealLng').value);
+            const radiusKm = Number(document.getElementById('dealRadius').value) || 10;
+            const resourceId = document.getElementById('dealResourceId').value || undefined;
+            const skillId = document.getElementById('dealSkillId').value || undefined;
+
+            await apiFetch('/api/deals', {
+                method: 'POST',
+                body: JSON.stringify({ title, description, category, budgetMin, budgetMax, lat, lng, radiusKm, resourceId, skillId })
+            });
+        }
+
+        async function apiListDeals() {
+            const cat = document.getElementById('filterCategory').value;
+            const status = document.getElementById('filterStatus').value;
+            let query = `?limit=50&offset=0`;
+            if (cat) query += `&category=${encodeURIComponent(cat)}`;
+            if (status) query += `&status=${encodeURIComponent(status)}`;
+            await apiFetch(`/api/deals${query}`);
+        }
+
+        async function apiListNearbyDeals() {
+            const lat = document.getElementById('dealLat').value || 37.7749;
+            const lng = document.getElementById('dealLng').value || -122.4194;
+            const radius = document.getElementById('dealRadius').value || 10;
+            await apiFetch(`/api/deals/nearby?lat=${lat}&lng=${lng}&radiusKm=${radius}`);
+        }
+
+        async function apiCreateResource() {
+            const title = document.getElementById('resTitle').value;
+            const description = document.getElementById('resDesc').value || undefined;
+            const category = document.getElementById('resCategory').value || undefined;
+            const condition = document.getElementById('resCondition').value || undefined;
+            const lat = Number(document.getElementById('resLat').value);
+            const lng = Number(document.getElementById('resLng').value);
+
+            await apiFetch('/api/resources', {
+                method: 'POST',
+                body: JSON.stringify({ title, description, category, condition, lat, lng })
+            });
+        }
+
+        async function apiListMyResources() {
+            await apiFetch('/api/resources/mine');
+        }
+
+        async function apiListNearbyResources() {
+            const lat = document.getElementById('resLat').value || 37.7749;
+            const lng = document.getElementById('resLng').value || -122.4194;
+            await apiFetch(`/api/resources/nearby?lat=${lat}&lng=${lng}&radiusKm=20`);
+        }
+
+        async function apiGetResourceChain() {
+            const id = document.getElementById('chainResId').value;
+            const res = await apiFetch(`/api/resources/${id}/chain`);
+            const container = document.getElementById('chainTimelineContainer');
+            container.innerHTML = '';
+
+            if (res.status === 200 && Array.isArray(res.data?.data)) {
+                const list = res.data.data;
+                if (list.length === 0) {
+                    container.innerHTML = '<div style="color: var(--text-muted);">No transactions recorded for this resource yet.</div>';
+                    return;
+                }
+
+                const timeline = document.createElement('div');
+                timeline.className = 'chain-timeline';
+
+                list.forEach((tx, idx) => {
+                    const node = document.createElement('div');
+                    const isRedacted = !tx.from_user_id;
+                    node.className = `chain-node ${isRedacted ? 'redacted' : ''}`;
+                    node.innerHTML = `
+                        <div style="font-weight: 700; font-size: 13px;">Hop #${idx + 1} — Tx ID: ${tx.id.substring(0, 8)}...</div>
+                        <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
+                            ${isRedacted ? '🔒 <em>Participants Redacted for Privacy</em>' : `From: <code>${tx.from_user_id}</code> ➔ To: <code>${tx.to_user_id}</code>`}
+                        </div>
+                        <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Status: <strong>${tx.status}</strong> | Created: ${new Date(tx.created_at).toLocaleString()}</div>
+                    `;
+                    timeline.appendChild(node);
+                });
+
+                container.appendChild(timeline);
+            }
+        }
+
+        async function apiCreateSkill() {
+            const name = document.getElementById('skillName').value;
+            const description = document.getElementById('skillDesc').value || undefined;
+            const category = document.getElementById('skillCategory').value || undefined;
+
+            await apiFetch('/api/skills', {
+                method: 'POST',
+                body: JSON.stringify({ name, description, category })
+            });
+        }
+
+        async function apiListMySkills() {
+            await apiFetch('/api/skills/mine');
+        }
+
+        async function apiCreateOffer() {
+            const dealId = document.getElementById('offerDealId').value;
+            const price = Number(document.getElementById('offerPrice').value) || undefined;
+            const terms = document.getElementById('offerTerms').value || undefined;
+
+            await apiFetch(`/api/deals/${dealId}/offers`, {
+                method: 'POST',
+                body: JSON.stringify({ price, terms })
+            });
+        }
+
+        async function apiListOffersOnDeal() {
+            const dealId = document.getElementById('offerDealId').value;
+            await apiFetch(`/api/deals/${dealId}/offers`);
+        }
+
+        async function apiAcceptOffer() {
+            const offerId = document.getElementById('targetOfferId').value;
+            await apiFetch(`/api/offers/${offerId}/accept`, { method: 'PATCH' });
+        }
+
+        async function apiRejectOffer() {
+            const offerId = document.getElementById('targetOfferId').value;
+            await apiFetch(`/api/offers/${offerId}/reject`, { method: 'PATCH' });
+        }
+
+        async function apiWithdrawOffer() {
+            const offerId = document.getElementById('targetOfferId').value;
+            await apiFetch(`/api/offers/${offerId}/withdraw`, { method: 'PATCH' });
+        }
+
+        async function apiGetTransaction() {
+            const id = document.getElementById('txIdInput').value;
+            await apiFetch(`/api/transactions/${id}`);
+        }
+
+        function clearTestLogs() {
+            document.getElementById('testSuiteProgress').innerHTML = '';
+        }
+
+        async function runAutomatedSuite() {
+            const progress = document.getElementById('testSuiteProgress');
+            progress.innerHTML = '';
+
+            const appendStep = (title, status, details = '') => {
+                const el = document.createElement('div');
+                el.style.padding = '8px 12px';
+                el.style.borderRadius = '6px';
+                el.style.fontSize = '12.5px';
+                el.style.fontFamily = 'var(--font-mono)';
+                el.style.background = status === 'pass' ? 'rgba(16, 185, 129, 0.15)' : (status === 'fail' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(59, 130, 246, 0.15)');
+                el.style.color = status === 'pass' ? '#34d399' : (status === 'fail' ? '#f87171' : '#60a5fa');
+                el.innerHTML = `<strong>[${status.toUpperCase()}]</strong> ${title} ${details ? `<br><small style="color: #9ca3af;">${details}</small>` : ''}`;
+                progress.appendChild(el);
+            };
+
+            try {
+                appendStep('1. Checking Backend Health (/api)', 'running');
+                const health = await apiFetch('/api');
+                if (health.status === 200) appendStep('1. Health Check Confirmed', 'pass');
+                else throw new Error('Health check failed');
+
+                const testEmailA = `test-user-a-${Date.now()}@example.com`;
+                const testEmailB = `test-user-b-${Date.now()}@example.com`;
+                const pass = 'TestPassword123!';
+
+                appendStep('2. Registering Test User A', 'running');
+                const regA = await apiFetch('/api/auth/register', { method: 'POST', body: JSON.stringify({ email: testEmailA, password: pass }) });
+                if (regA.status !== 201) throw new Error('Failed to register User A');
+                appendStep('2. User A Registered', 'pass', `UUID: ${regA.data.data.id}`);
+
+                appendStep('3. Creating Resource by User A', 'running');
+                const resCreate = await apiFetch('/api/resources', {
+                    method: 'POST',
+                    body: JSON.stringify({ title: 'Test Cordless Drill', lat: 37.7749, lng: -122.4194 })
+                });
+                if (resCreate.status !== 201) throw new Error('Failed to create resource');
+                const resourceId = resCreate.data.data.id;
+                appendStep('3. Resource Created', 'pass', `Resource ID: ${resourceId}`);
+
+                appendStep('4. Creating Deal for Resource by User A', 'running');
+                const dealCreate = await apiFetch('/api/deals', {
+                    method: 'POST',
+                    body: JSON.stringify({ title: 'Need someone to use drill', lat: 37.7749, lng: -122.4194, resourceId })
+                });
+                if (dealCreate.status !== 201) throw new Error('Failed to create deal');
+                const dealId = dealCreate.data.data.id;
+                appendStep('4. Deal Created', 'pass', `Deal ID: ${dealId}`);
+
+                appendStep('5. Registering Test User B (Recipient/Provider)', 'running');
+                const regB = await apiFetch('/api/auth/register', { method: 'POST', body: JSON.stringify({ email: testEmailB, password: pass }) });
+                if (regB.status !== 201) throw new Error('Failed to register User B');
+                appendStep('5. User B Registered', 'pass');
+
+                appendStep('6. Submitting Offer by User B', 'running');
+                const offerCreate = await apiFetch(`/api/deals/${dealId}/offers`, {
+                    method: 'POST',
+                    body: JSON.stringify({ price: 150, terms: 'Will return in 3 days' })
+                });
+                if (offerCreate.status !== 201) throw new Error('Failed to create offer');
+                const offerId = offerCreate.data.data.id;
+                appendStep('6. Offer Submitted by User B', 'pass', `Offer ID: ${offerId}`);
+
+                appendStep('7. User A Logs in to Accept Offer', 'running');
+                await apiFetch('/api/auth/login', { method: 'POST', body: JSON.stringify({ email: testEmailA, password: pass }) });
+                const acceptRes = await apiFetch(`/api/offers/${offerId}/accept`, { method: 'PATCH' });
+                if (acceptRes.status !== 200) throw new Error('Failed to accept offer');
+                appendStep('7. Offer Accepted & Atomic Handover Completed', 'pass');
+
+                appendStep('8. Inspecting Custody Chain Provenance', 'running');
+                const chainRes = await apiFetch(`/api/resources/${resourceId}/chain`);
+                if (chainRes.status !== 200 || !chainRes.data?.data?.length) throw new Error('Failed to verify chain');
+                appendStep('8. Custody Chain Verified', 'pass', `Total Hops: ${chainRes.data.data.length}`);
+
+                appendStep('All Integrated Workflow Tests Completed Successfully!', 'pass');
+            } catch (err) {
+                appendStep(`Test Suite Aborted: ${err.message}`, 'fail');
+            }
+        }
+
+        apiGetMe();
+    </script>
+</body>
+</html>

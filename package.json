@@ -15,8 +15,9 @@
   "type": "module",
   "main": "app.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "nodemon --exec tsx src/server.ts"
+    "dev": "nodemon --exec tsx src/server.ts",
+    "migrate": "tsx scripts/migrate.ts",
+    "test": "bash scripts/run-tests.sh"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.3",
@@ -33,14 +34,11 @@
     "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
-    "@types/jest": "^30.0.0",
     "@types/node": "^26.2.0",
     "@types/pg": "^8.21.0",
     "@types/supertest": "^7.2.1",
-    "jest": "^30.4.2",
     "nodemon": "^3.1.14",
     "supertest": "^7.2.2",
-    "ts-jest": "^29.4.12",
     "tsx": "^4.23.12",
     "typescript": "^6.0.3"
   }

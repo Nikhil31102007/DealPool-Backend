@@ -25,6 +25,11 @@
             margin-bottom: 20px;
         }
 
+        #apiBase {
+            width: 300px;
+            padding: 6px 10px;
+        }
+
         #output {
             width: 700px;
             max-height: 600px;
@@ -54,6 +59,14 @@
 <body>
 
     <h1>Firebase Google Auth Test</h1>
+
+    <h3>API Base URL</h3>
+
+    <input
+        id="apiBase"
+        type="text"
+        value="http://localhost:3000"
+    >
 
     <button id="googleLogin">
         Continue with Google
@@ -101,16 +114,15 @@
             signInWithPopup
         } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 
-const firebaseConfig = {
-  apiKey: "AIzaSyDeGFAr3dYtJfUJlh2fSzoCmyOC93cOA8E",
-  authDomain: "dealpoolbackend.firebaseapp.com",
-  projectId: "dealpoolbackend",
-  storageBucket: "dealpoolbackend.firebasestorage.app",
-  messagingSenderId: "113744651425",
-  appId: "1:113744651425:web:e795fd7bd98b22148cbce0",
-  measurementId: "G-LD8T2PZ2HX"
-};
-
+        const firebaseConfig = {
+            apiKey: "AIzaSyDeGFAr3dYtJfUJlh2fSzoCmyOC93cOA8E",
+            authDomain: "dealpoolbackend.firebaseapp.com",
+            projectId: "dealpoolbackend",
+            storageBucket: "dealpoolbackend.firebasestorage.app",
+            messagingSenderId: "113744651425",
+            appId: "1:113744651425:web:e795fd7bd98b22148cbce0",
+            measurementId: "G-LD8T2PZ2HX"
+        };
 
         const app = initializeApp(firebaseConfig);
 
@@ -118,320 +130,116 @@ const firebaseConfig = {
 
         const provider = new GoogleAuthProvider();
 
+        const apiBaseInput = document.getElementById("apiBase");
 
-        const googleLogin =
-            document.getElementById("googleLogin");
+        const googleLogin = document.getElementById("googleLogin");
+        const getMe = document.getElementById("getMe");
+        const logout = document.getElementById("logout");
+        const uid = document.getElementById("uid");
+        const idToken = document.getElementById("idToken");
+        const output = document.getElementById("output");
 
-        const getMe =
-            document.getElementById("getMe");
+        function apiUrl(path) {
+            return `${apiBaseInput.value.replace(/\/$/, "")}${path}`;
+        }
 
-        const logout =
-            document.getElementById("logout");
-
-        const uid =
-            document.getElementById("uid");
-
-        const idToken =
-            document.getElementById("idToken");
-
-        const output =
-            document.getElementById("output");
-
-
-        /*
-         * Add a response to the response history.
-         */
         function showResponse(title, response, data) {
+            const container = document.createElement("div");
+            container.className = "response";
 
-            const container =
-                document.createElement("div");
+            const responseTitle = document.createElement("div");
+            responseTitle.className = "response-title";
+            responseTitle.textContent = `${new Date().toLocaleTimeString()} | ${title} | HTTP ${response.status}`;
 
-            container.className =
-                "response";
+            const responseBody = document.createElement("pre");
+            responseBody.textContent = JSON.stringify(data, null, 2);
 
+            container.appendChild(responseTitle);
+            container.appendChild(responseBody);
 
-            const responseTitle =
-                document.createElement("div");
-
-            responseTitle.className =
-                "response-title";
-
-            responseTitle.textContent =
-                `${new Date().toLocaleTimeString()} | ${title} | HTTP ${response.status}`;
-
-
-            const responseBody =
-                document.createElement("pre");
-
-            responseBody.textContent =
-                JSON.stringify(
-                    data,
-                    null,
-                    2
-                );
-
-
-            container.appendChild(
-                responseTitle
-            );
-
-            container.appendChild(
-                responseBody
-            );
-
-
-            /*
-             * Newest response appears at the top.
-             */
             output.prepend(container);
         }
 
-
-        /*
-         * Show errors in the response history.
-         */
         function showError(title, error) {
+            const container = document.createElement("div");
+            container.className = "response";
 
-            const container =
-                document.createElement("div");
+            const responseTitle = document.createElement("div");
+            responseTitle.className = "response-title";
+            responseTitle.textContent = `${new Date().toLocaleTimeString()} | ${title} | ERROR`;
 
-            container.className =
-                "response";
+            const responseBody = document.createElement("pre");
+            responseBody.textContent = error.message || String(error);
 
-
-            const responseTitle =
-                document.createElement("div");
-
-            responseTitle.className =
-                "response-title";
-
-            responseTitle.textContent =
-                `${new Date().toLocaleTimeString()} | ${title} | ERROR`;
-
-
-            const responseBody =
-                document.createElement("pre");
-
-            responseBody.textContent =
-                error.message || String(error);
-
-
-            container.appendChild(
-                responseTitle
-            );
-
-            container.appendChild(
-                responseBody
-            );
-
+            container.appendChild(responseTitle);
+            container.appendChild(responseBody);
 
             output.prepend(container);
         }
 
+        googleLogin.addEventListener("click", async () => {
+            if (googleLogin.disabled) return;
+            googleLogin.disabled = true;
 
-        /*
-         * Google Login
-         */
-        googleLogin.addEventListener(
-            "click",
-            async () => {
+            try {
+                const result = await signInWithPopup(auth, provider);
+                const user = result.user;
+                const token = await user.getIdToken();
 
-                if (googleLogin.disabled) {
-                    return;
-                }
+                uid.value = user.uid;
+                idToken.value = token;
 
-                googleLogin.disabled = true;
+                const response = await fetch(apiUrl("/api/auth/google"), {
+                    method: "POST",
+                    credentials: "include",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ idToken: token })
+                });
 
-                try {
-
-                    const result =
-                        await signInWithPopup(
-                            auth,
-                            provider
-                        );
-
-
-                    const user =
-                        result.user;
-
-
-                    const token =
-                        await user.getIdToken();
-
-
-                    uid.value =
-                        user.uid;
-
-                    idToken.value =
-                        token;
-
-
-                    console.log(
-                        "Firebase UID:",
-                        user.uid
-                    );
-
-                    console.log(
-                        "Firebase ID Token:",
-                        token
-                    );
-
-
-                    /*
-                     * Send Firebase ID token
-                     * to backend.
-                     */
-                    const response =
-                        await fetch(
-                            "http://localhost:3000/api/auth/google",
-                            {
-                                method: "POST",
-
-                                credentials: "include",
-
-                                headers: {
-                                    "Content-Type":
-                                        "application/json"
-                                },
-
-                                body: JSON.stringify({
-                                    idToken: token
-                                })
-                            }
-                        );
-
-
-                    const data =
-                        await response.json();
-
-
-                    showResponse(
-                        "POST /api/auth/google",
-                        response,
-                        data
-                    );
-
-                } catch (error) {
-
-                    console.error(error);
-
-                    showError(
-                        "POST /api/auth/google",
-                        error
-                    );
-
-                } finally {
-
-                    googleLogin.disabled = false;
-                }
+                const data = await response.json();
+                showResponse("POST /api/auth/google", response, data);
+            } catch (error) {
+                console.error(error);
+                showError("POST /api/auth/google", error);
+            } finally {
+                googleLogin.disabled = false;
             }
-        );
+        });
 
+        getMe.addEventListener("click", async () => {
+            try {
+                const response = await fetch(apiUrl("/api/auth/me"), {
+                    method: "GET",
+                    credentials: "include"
+                });
 
-        /*
-         * GET /me
-         *
-         * Browser automatically sends
-         * the HTTP-only accessToken cookie.
-         */
-        getMe.addEventListener(
-            "click",
-            async () => {
-
-                try {
-
-                    const response =
-                        await fetch(
-                            "http://localhost:3000/api/auth/me",
-                            {
-                                method: "GET",
-
-                                credentials: "include"
-                            }
-                        );
-
-
-                    const data =
-                        await response.json();
-
-
-                    showResponse(
-                        "GET /api/auth/me",
-                        response,
-                        data
-                    );
-
-                } catch (error) {
-
-                    console.error(error);
-
-                    showError(
-                        "GET /api/auth/me",
-                        error
-                    );
-                }
+                const data = await response.json();
+                showResponse("GET /api/auth/me", response, data);
+            } catch (error) {
+                console.error(error);
+                showError("GET /api/auth/me", error);
             }
-        );
+        });
 
+        logout.addEventListener("click", async () => {
+            try {
+                const response = await fetch(apiUrl("/api/auth/logout"), {
+                    method: "POST",
+                    credentials: "include"
+                });
 
-        /*
-         * POST /logout
-         *
-         * Backend clears:
-         *
-         * accessToken
-         * refreshToken
-         */
-        logout.addEventListener(
-            "click",
-            async () => {
+                const data = await response.json();
+                showResponse("POST /api/auth/logout", response, data);
 
-                try {
+                await auth.signOut();
 
-                    const response =
-                        await fetch(
-                            "http://localhost:3000/api/auth/logout",
-                            {
-                                method: "POST",
-
-                                credentials: "include"
-                            }
-                        );
-
-
-                    const data =
-                        await response.json();
-
-
-                    showResponse(
-                        "POST /api/auth/logout",
-                        response,
-                        data
-                    );
-
-
-                    /*
-                     * Clear Firebase client session.
-                     */
-                    await auth.signOut();
-
-
-                    uid.value = "";
-
-                    idToken.value = "";
-
-
-                } catch (error) {
-
-                    console.error(error);
-
-                    showError(
-                        "POST /api/auth/logout",
-                        error
-                    );
-                }
+                uid.value = "";
+                idToken.value = "";
+            } catch (error) {
+                console.error(error);
+                showError("POST /api/auth/logout", error);
             }
-        );
+        });
 
     </script>
 

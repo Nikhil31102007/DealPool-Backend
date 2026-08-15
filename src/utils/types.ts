@@ -5,6 +5,7 @@ export type UserRole = "user" | "admin";
 
 export interface AuthUser {
     uid: string;
+    firebaseUid: string;
     email: string | undefined;
     role: UserRole;
 }

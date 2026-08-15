@@ -4,7 +4,7 @@ import {
     getProfileById,
     updateUserRole,
     deleteProfileById,
-} from "../services/admin.services";
+} from "../services/admin.service";
 import { badRequest } from "../utils/errors";
 import type { ApiResponse } from "../utils/responseApi";
 import type { UserRole } from "../utils/types";
@@ -39,7 +39,7 @@ export const getUser = async (
     next: NextFunction
 ): Promise<void> => {
     try {
-        const profile = await getProfileById(req.params.id);
+        const profile = await getProfileById(req.params.id as string);
 
         const response: ApiResponse<typeof profile> = {
             success: true,
@@ -65,7 +65,7 @@ export const updateRole = async (
             return;
         }
 
-        const profile = await updateUserRole(req.params.id, role);
+        const profile = await updateUserRole(req.params.id as string, role);
 
         const response: ApiResponse<typeof profile> = {
             success: true,
@@ -84,7 +84,7 @@ export const deleteUser = async (
     next: NextFunction
 ): Promise<void> => {
     try {
-        await deleteProfileById(req.params.id);
+        await deleteProfileById(req.params.id as string);
 
         const response: ApiResponse<null> = {
             success: true,

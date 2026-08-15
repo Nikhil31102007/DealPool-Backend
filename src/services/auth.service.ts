@@ -2,6 +2,7 @@ import { firebaseAuth } from "../config/firebase";
 import { generateUsername } from "../utils/username";
 import {
     findProfileByFirebaseUid,
+    findProfileById,
     findProfileByEmail,
     insertProfile,
     updateProfileFields,
@@ -82,6 +83,13 @@ export const registerUser = async (email: string, password: string) => {
         throw conflict("Profile already exists", "PROFILE_EXISTS");
     }
 
+    if (password.length < 6) {
+        throw badRequest(
+            "New password must be at least 6 characters",
+            "WEAK_PASSWORD"
+        );
+    }
+
     const firebaseUser = await firebaseRequest<FirebaseAuthResponse>("signUp", {
         email,
         password,
@@ -117,7 +125,8 @@ export const loginUser = async (email: string, password: string) => {
         { email, password, returnSecureToken: true }
     );
 
-    const profile = await getProfile(firebaseUser.localId);
+    // login flow only ever has the Firebase UID at this point, so this lookup is correct as-is
+    const profile = await findProfileByFirebaseUidOrThrow(firebaseUser.localId);
 
     return {
         profile,
@@ -126,7 +135,17 @@ export const loginUser = async (email: string, password: string) => {
     };
 };
 
-export const refreshFirebaseToken = async (refreshToken: string) => {
+const findProfileByFirebaseUidOrThrow = async (firebaseUid: string): Promise<Profile> => {
+    const profile = await findProfileByFirebaseUid(firebaseUid);
+
+    if (!profile) {
+        throw unauthorized("User profile not found", "PROFILE_NOT_FOUND");
+    }
+
+    return profile;
+};
+
+export const refreshFirebaseToken = async (refreshToken: string | undefined) => {
     if (!refreshToken) {
         throw unauthorized("Refresh token is required", "INVALID_REFRESH_TOKEN");
     }
@@ -193,8 +212,13 @@ export const createProfile = async (uid: string): Promise<Profile> => {
     throw lastError;
 };
 
-export const getProfile = async (uid: string): Promise<Profile> => {
-    const profile = await findProfileByFirebaseUid(uid);
+/**
+ * Used by GET /api/auth/me and PATCH /api/auth/change-password.
+ * Called with req.user!.uid, which is the POSTGRES profile id (per authMiddleware),
+ * NOT the Firebase UID — so this must look up by Postgres id.
+ */
+export const getProfile = async (postgresUid: string): Promise<Profile> => {
+    const profile = await findProfileById(postgresUid);
 
     if (!profile) {
         throw unauthorized("User profile not found", "PROFILE_NOT_FOUND");
@@ -203,8 +227,12 @@ export const getProfile = async (uid: string): Promise<Profile> => {
     return profile;
 };
 
-export const findProfile = async (uid: string): Promise<Profile | null> => {
-    return findProfileByFirebaseUid(uid);
+/**
+ * Used only by authMiddleware, which passes the FIREBASE UID from the decoded token.
+ * Keep this looking up by firebase_uid.
+ */
+export const findProfile = async (firebaseUid: string): Promise<Profile | null> => {
+    return findProfileByFirebaseUid(firebaseUid);
 };
 
 export const verifyFirebaseToken = async (token: string) => {
@@ -244,8 +272,12 @@ const UPDATABLE_FIELDS: (keyof UpdateProfileInput)[] = [
     "profile_photo",
 ];
 
+/**
+ * Called with req.user!.uid (POSTGRES id) from PATCH /api/auth/update.
+ * updateProfileFields must match on the Postgres profiles.id column.
+ */
 export const updateProfile = async (
-    uid: string,
+    postgresUid: string,
     updates: UpdateProfileInput
 ): Promise<Profile> => {
     const fields: Record<string, unknown> = {};
@@ -261,7 +293,7 @@ export const updateProfile = async (
     }
 
     try {
-        const profile = await updateProfileFields(uid, fields);
+        const profile = await updateProfileFields(postgresUid, fields);
 
         if (!profile) {
             throw notFound("User profile not found", "PROFILE_NOT_FOUND");
@@ -282,4 +314,59 @@ export const updateProfile = async (
 
         throw error;
     }
+};
+
+/**
+ * Called with req.user!.uid (POSTGRES id) from PATCH /api/auth/change-password.
+ * Must look up the profile by Postgres id to find the associated firebase_uid,
+ * then use THAT firebase_uid for the Firebase Admin SDK call — not the postgresUid param.
+ */
+export const changeUserPassword = async (
+    postgresUid: string,
+    currentPassword: string,
+    newPassword: string
+): Promise<void> => {
+    if (!currentPassword || !newPassword) {
+        throw badRequest(
+            "Current password and new password are required",
+            "INVALID_CREDENTIALS"
+        );
+    }
+
+    if (newPassword.length < 6) {
+        throw badRequest(
+            "New password must be at least 6 characters",
+            "WEAK_PASSWORD"
+        );
+    }
+
+    const profile = await findProfileById(postgresUid);
+
+    if (!profile) {
+        throw unauthorized("User profile not found", "UNAUTHORIZED");
+    }
+
+    // Verify current password by signing in via Firebase REST
+    const verifyResponse = await fetch(
+        `${firebaseAuthUrl}:signInWithPassword?key=${firebaseApiKey}`,
+        {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                email: profile.email,
+                password: currentPassword,
+                returnSecureToken: false,
+            }),
+        }
+    );
+
+    if (!verifyResponse.ok) {
+        throw unauthorized(
+            "Current password is incorrect",
+            "INVALID_CREDENTIALS"
+        );
+    }
+
+    // Update password via Firebase Admin SDK — must use the FIREBASE uid, not postgresUid
+    await firebaseAuth.updateUser(profile.firebase_uid, { password: newPassword });
 };

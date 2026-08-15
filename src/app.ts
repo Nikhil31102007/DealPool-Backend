@@ -2,7 +2,7 @@
 import express from "express";
 import cookieParser from "cookie-parser";
 
-import authRoutes from "./routes/auth.routes";
+import authRoutes from "./routes/auth.route";
 import { errorHandler } from "./middleware/error.middleware";
 import { requestLogger } from "./middleware/requestlogger.middleware";
 
@@ -11,7 +11,13 @@ import {
     apiRateLimiter,
     authRateLimiter,
 } from "./config/ratelimit";
-import adminRoutes from "./routes/admin.routes";
+import adminRoutes from "./routes/admin.route";
+import dealRoutes from "./routes/deal.route";
+import offerRoutes from "./routes/offer.route";
+import resourceRoutes from "./routes/resource.route";
+import skillRoutes from "./routes/skill.route";
+import transactionRoutes from "./routes/transaction.route";
+
 
 const app = express();
 app.use(corsConfig);
@@ -29,6 +35,16 @@ app.use(
 );
 
 app.use("/api/admin", adminRoutes);
+
+app.use("/api/deals",dealRoutes);
+
+app.use("/api/offers", offerRoutes);
+
+app.use("/api/resources", resourceRoutes);
+
+app.use("/api/skills", skillRoutes);
+
+app.use("/api/transactions", transactionRoutes);    
 
 app.get("/api", (_req, res) => {
     res.status(200).json({

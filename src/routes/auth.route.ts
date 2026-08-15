@@ -7,6 +7,7 @@ import {
     refresh,
     googleLogin,
     updateMe,
+    changePassword,
 } from "../controllers/auth.controller";
 import { authMiddleware } from "../middleware/auth.middleware";
 
@@ -19,5 +20,6 @@ router.post("/logout", logout);
 router.post("/refresh", refresh);
 router.post("/google", googleLogin);
 router.patch("/update", authMiddleware, updateMe);
+router.patch("/change-password", authMiddleware, changePassword);
 
 export default router;

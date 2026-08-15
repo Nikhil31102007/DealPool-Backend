@@ -6,6 +6,7 @@ import {
     refreshFirebaseToken,
     googleLoginUser,
     updateProfile,
+    changeUserPassword,
 } from "../services/auth.service";
 import type { ApiResponse } from "../utils/responseApi";
 
@@ -78,14 +79,6 @@ export const refresh = async (
 ): Promise<void> => {
     try {
         const refreshToken = req.cookies?.refreshToken;
-
-        if (!refreshToken) {
-            res.status(401).json({
-                success: false,
-                message: "Refresh token not found",
-            });
-            return;
-        }
 
         const refreshed = await refreshFirebaseToken(refreshToken);
 
@@ -194,6 +187,31 @@ export const updateMe = async (
         const response: ApiResponse<typeof profile> = {
             success: true,
             data: profile,
+        };
+
+        res.status(200).json(response);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const changePassword = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+): Promise<void> => {
+    try {
+        const { currentPassword, newPassword } = req.body;
+
+        await changeUserPassword(
+            req.user!.uid,
+            currentPassword,
+            newPassword
+        );
+
+        const response: ApiResponse<null> = {
+            success: true,
+            data: null,
         };
 
         res.status(200).json(response);

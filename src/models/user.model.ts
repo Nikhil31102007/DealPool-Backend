@@ -61,12 +61,17 @@ export const insertProfile = async (params: {
     return result.rows[0];
 };
 
+/**
+ * Called from auth.service.ts's updateProfile() with req.user!.uid, which is
+ * the POSTGRES profiles.id (per authMiddleware) — NOT the firebase_uid.
+ * Must match on id, not firebase_uid.
+ */
 export const updateProfileFields = async (
-    uid: string,
+    id: string,
     fields: Record<string, unknown>
 ): Promise<Profile | null> => {
     const keys = Object.keys(fields);
-    if (keys.length === 0) return findProfileByFirebaseUid(uid);
+    if (keys.length === 0) return findProfileById(id);
 
     const setClauses = keys.map((key, index) => `${key} = $${index + 2}`);
     const values = keys.map((key) => fields[key]);
@@ -75,10 +80,10 @@ export const updateProfileFields = async (
         `
         UPDATE profiles
         SET ${setClauses.join(", ")}, updated_at = now()
-        WHERE firebase_uid = $1
+        WHERE id = $1
         RETURNING *
         `,
-        [uid, ...values]
+        [id, ...values]
     );
 
     return result.rows[0] ?? null;
