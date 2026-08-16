@@ -1344,6 +1344,115 @@
             }
         }
 
+        // ---- One-click real Razorpay Checkout flow ----
+        // This was previously referenced by the "💳 Pay with Razorpay (Test Mode)" button's
+        // onclick handler but never implemented, so the button silently did nothing.
+        // apiCreatePaymentOrder() above only hits POST /api/payments/order (a DB write) —
+        // it never opens the actual Razorpay widget. This function does the full flow:
+        // create order -> open Razorpay Checkout -> on success, auto-verify with the backend.
+        function showRzpStatus(text, kind) {
+            const statusEl = document.getElementById('rzpCheckoutStatus');
+            statusEl.style.display = 'block';
+            statusEl.textContent = text;
+            statusEl.style.background = kind === 'error'
+                ? 'rgba(239, 68, 68, 0.15)'
+                : kind === 'success'
+                    ? 'rgba(16, 185, 129, 0.15)'
+                    : 'rgba(59, 130, 246, 0.15)';
+            statusEl.style.color = kind === 'error'
+                ? '#f87171'
+                : kind === 'success'
+                    ? '#34d399'
+                    : '#60a5fa';
+        }
+
+        async function apiPayWithRazorpay() {
+            const transactionId = document.getElementById('rzpCheckoutTxId').value;
+
+            if (!transactionId) {
+                showRzpStatus('Enter a Transaction UUID first.', 'error');
+                return;
+            }
+
+            if (typeof Razorpay === 'undefined') {
+                showRzpStatus('Razorpay checkout.js failed to load — check your network connection or an ad-blocker.', 'error');
+                return;
+            }
+
+            showRzpStatus('Creating Razorpay order...', 'info');
+
+            let orderRes;
+            try {
+                orderRes = await apiFetch('/api/payments/order', {
+                    method: 'POST',
+                    body: JSON.stringify({ transactionId })
+                });
+            } catch (err) {
+                showRzpStatus(`Network error creating order: ${err.message}`, 'error');
+                return;
+            }
+
+            if (orderRes.status !== 201 || !orderRes.data?.data?.orderId) {
+                showRzpStatus(`Failed to create order: ${orderRes.data?.error?.message || `HTTP ${orderRes.status}`}`, 'error');
+                return;
+            }
+
+            const { orderId, amount, currency, keyId } = orderRes.data.data;
+            document.getElementById('rzpOrderId').value = orderId;
+
+            showRzpStatus('Opening Razorpay checkout...', 'info');
+
+            const rzp = new Razorpay({
+                key: keyId,
+                amount,
+                currency,
+                order_id: orderId,
+                name: 'DealPool (Test Mode)',
+                description: `Transaction ${transactionId}`,
+                handler: async function (response) {
+                    document.getElementById('rzpOrderId').value = response.razorpay_order_id;
+                    document.getElementById('rzpPaymentId').value = response.razorpay_payment_id;
+                    document.getElementById('rzpSignature').value = response.razorpay_signature;
+
+                    showRzpStatus('Payment captured by Razorpay — verifying with backend...', 'info');
+
+                    let verifyRes;
+                    try {
+                        verifyRes = await apiFetch('/api/payments/verify', {
+                            method: 'POST',
+                            body: JSON.stringify({
+                                razorpayOrderId: response.razorpay_order_id,
+                                razorpayPaymentId: response.razorpay_payment_id,
+                                razorpaySignature: response.razorpay_signature,
+                            })
+                        });
+                    } catch (err) {
+                        showRzpStatus(`Network error verifying payment: ${err.message}`, 'error');
+                        return;
+                    }
+
+                    if (verifyRes.status === 200) {
+                        const txStatus = verifyRes.data?.data?.transaction?.status;
+                        showRzpStatus(`✓ Payment verified. Transaction status: ${txStatus}`, 'success');
+                    } else {
+                        showRzpStatus(`Verification failed: ${verifyRes.data?.error?.message || `HTTP ${verifyRes.status}`}`, 'error');
+                    }
+                },
+                modal: {
+                    ondismiss: function () {
+                        showRzpStatus('Checkout closed before completing payment.', 'error');
+                    }
+                },
+                theme: { color: '#2563eb' }
+            });
+
+            rzp.on('payment.failed', function (response) {
+                showRzpStatus(`Payment failed: ${response.error?.description || 'unknown error'}`, 'error');
+            });
+
+            rzp.open();
+        }
+
         async function apiVerifyPayment() {
             const razorpayOrderId = document.getElementById('rzpOrderId').value;
             const razorpayPaymentId = document.getElementById('rzpPaymentId').value;
