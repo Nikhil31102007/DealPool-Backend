@@ -39,7 +39,7 @@ export const listDealsHandler = async (
         const limit = Number(req.query.limit) || 50;
         const offset = Number(req.query.offset) || 0;
 
-        const deals = await listAllDeals(
+        const result = await listAllDeals(
             {
                 category: category as string | undefined,
                 status: status as string | undefined,
@@ -48,9 +48,9 @@ export const listDealsHandler = async (
             offset
         );
 
-        const response: ApiResponse<typeof deals> = {
+        const response: ApiResponse<typeof result> = {
             success: true,
-            data: deals,
+            data: result,
         };
 
         res.status(200).json(response);
@@ -71,11 +71,11 @@ export const listNearbyDealsHandler = async (
         const limit = Number(req.query.limit) || 50;
         const offset = Number(req.query.offset) || 0;
 
-        const deals = await listNearbyDeals(lat, lng, radiusKm, limit, offset);
+        const result = await listNearbyDeals(lat, lng, radiusKm, limit, offset);
 
-        const response: ApiResponse<typeof deals> = {
+        const response: ApiResponse<typeof result> = {
             success: true,
-            data: deals,
+            data: result,
         };
 
         res.status(200).json(response);

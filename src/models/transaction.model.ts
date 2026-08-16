@@ -116,3 +116,37 @@ export const updateTransactionStatus = async (
     );
     return result.rows[0] ?? null;
 };
+
+export const updateTransactionCheckedOut = async (
+    id: string,
+    client?: PoolClient
+): Promise<Transaction | null> => {
+    const executor = client ?? pool;
+    const result = await executor.query(
+        `
+        UPDATE transactions
+        SET status = 'active', checked_out_at = now(), updated_at = now()
+        WHERE id = $1
+        RETURNING *
+        `,
+        [id]
+    );
+    return result.rows[0] ?? null;
+};
+
+export const updateTransactionCompleted = async (
+    id: string,
+    client?: PoolClient
+): Promise<Transaction | null> => {
+    const executor = client ?? pool;
+    const result = await executor.query(
+        `
+        UPDATE transactions
+        SET status = 'completed', completed_at = now(), updated_at = now()
+        WHERE id = $1
+        RETURNING *
+        `,
+        [id]
+    );
+    return result.rows[0] ?? null;
+};

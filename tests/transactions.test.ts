@@ -185,6 +185,36 @@ try {
     if (res.status !== 200) throw new Error(`Expected 200 got ${res.status}`);
     if (res.body.data?.parent_transaction_id !== tx1Id) throw new Error("Hop 2 parent_transaction_id should equal hop 1's id");
   });
+
+  let qrTokenHop2: string;
+
+  await test("GET /api/transactions/:id/qr generates QR code data URL and signed token for B (giver in hop 2)", async () => {
+    const res = await request(app).get(`/api/transactions/${tx2Id}/qr`).set("Cookie", cookieB);
+    if (res.status !== 200) throw new Error(`Expected 200 got ${res.status} ${JSON.stringify(res.body)}`);
+    if (!res.body.data?.qrDataUrl || !res.body.data?.qrDataUrl.startsWith("data:image/png;base64,")) {
+      throw new Error("Invalid or missing qrDataUrl");
+    }
+    if (!res.body.data?.token) throw new Error("Missing token in QR response");
+    qrTokenHop2 = res.body.data.token;
+  });
+
+  await test("POST /api/transactions/:id/verify-qr rejects self-scanning by generator B", async () => {
+    const res = await request(app).post(`/api/transactions/${tx2Id}/verify-qr`).set("Cookie", cookieB).send({ token: qrTokenHop2 });
+    if (res.status !== 400) throw new Error(`Expected 400 for self-scan, got ${res.status}`);
+    if (res.body.error?.code !== "SELF_SCAN_NOT_ALLOWED") throw new Error(`Expected SELF_SCAN_NOT_ALLOWED, got ${res.body.error?.code}`);
+  });
+
+  await test("POST /api/transactions/:id/verify-qr rejects outsider D", async () => {
+    const res = await request(app).post(`/api/transactions/${tx2Id}/verify-qr`).set("Cookie", cookieD).send({ token: qrTokenHop2 });
+    if (res.status !== 403) throw new Error(`Expected 403 for outsider, got ${res.status}`);
+  });
+
+  await test("POST /api/transactions/:id/verify-qr succeeds when C (recipient) scans and marks transaction active", async () => {
+    const res = await request(app).post(`/api/transactions/${tx2Id}/verify-qr`).set("Cookie", cookieC).send({ token: qrTokenHop2 });
+    if (res.status !== 200) throw new Error(`Expected 200 got ${res.status} ${JSON.stringify(res.body)}`);
+    if (res.body.data?.status !== "active") throw new Error(`Expected status active, got ${res.body.data?.status}`);
+    if (!res.body.data?.checked_out_at) throw new Error("Expected checked_out_at timestamp to be set");
+  });
 } finally {
   if (uidA) try { await firebaseAuth.deleteUser(uidA); } catch (e) { console.error(e); }
   if (uidB) try { await firebaseAuth.deleteUser(uidB); } catch (e) { console.error(e); }

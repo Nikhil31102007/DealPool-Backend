@@ -15,8 +15,8 @@ export const createResourceHandler = async (req: Request, res: Response, next: N
 
 export const listMyResourcesHandler = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-        const resources = await listMyResources(req.user!.uid);
-        const response: ApiResponse<typeof resources> = { success: true, data: resources };
+        const result = await listMyResources(req.user!.uid, req.query);
+        const response: ApiResponse<typeof result> = { success: true, data: result };
         res.status(200).json(response);
     } catch (error) { next(error); }
 };
@@ -26,11 +26,9 @@ export const listNearbyResourcesHandler = async (req: Request, res: Response, ne
         const lat = Number(req.query.lat);
         const lng = Number(req.query.lng);
         const radiusKm = Number(req.query.radiusKm);
-        const limit = Number(req.query.limit) || 50;
-        const offset = Number(req.query.offset) || 0;
 
-        const resources = await listNearbyResources(lat, lng, radiusKm, limit, offset);
-        const response: ApiResponse<typeof resources> = { success: true, data: resources };
+        const result = await listNearbyResources(lat, lng, radiusKm, req.query);
+        const response: ApiResponse<typeof result> = { success: true, data: result };
         res.status(200).json(response);
     } catch (error) { next(error); }
 };

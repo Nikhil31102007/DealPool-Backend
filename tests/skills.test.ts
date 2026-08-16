@@ -66,7 +66,8 @@ try {
   await test("GET /api/skills/mine lists owned skills", async () => {
     const res = await request(app).get("/api/skills/mine").set("Cookie", cookie);
     if (res.status !== 200) throw new Error(`Expected 200 got ${res.status}`);
-    if (!Array.isArray(res.body.data) || !res.body.data.some((s: any) => s.id === skillId)) {
+    const items = res.body.data?.items ?? res.body.data;
+    if (!Array.isArray(items) || !items.some((s: any) => s.id === skillId)) {
       throw new Error("Created skill not found in /mine list");
     }
   });

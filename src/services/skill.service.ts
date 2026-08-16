@@ -1,8 +1,9 @@
 import {
-    insertSkill, findSkillById, listSkillsByUser,
+    insertSkill, findSkillById, listSkillsByUser, countSkillsByUser,
     updateSkillFields, deleteSkill, Skill,
 } from "../models/skill.model";
 import { badRequest, notFound, forbidden } from "../utils/errors";
+import { parsePagination, buildPaginatedResult, PaginatedResult } from "../utils/pagination";
 
 interface CreateSkillInput {
     name: string; description?: string; category?: string;
@@ -28,8 +29,18 @@ export const getSkillById = async (id: string): Promise<Skill> => {
     return skill;
 };
 
-export const listMySkills = async (userId: string): Promise<Skill[]> => {
-    return listSkillsByUser(userId);
+export const listMySkills = async (
+    userId: string,
+    rawQuery: { limit?: unknown; offset?: unknown }
+): Promise<PaginatedResult<Skill>> => {
+    const { limit, offset } = parsePagination(rawQuery);
+
+    const [items, total] = await Promise.all([
+        listSkillsByUser(userId, limit, offset),
+        countSkillsByUser(userId),
+    ]);
+
+    return buildPaginatedResult(items, total, limit, offset);
 };
 
 const UPDATABLE_SKILL_FIELDS = ["name", "description", "category", "is_available"] as const;

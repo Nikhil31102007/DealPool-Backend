@@ -72,7 +72,8 @@ try {
   await test("GET /api/resources/mine lists owned resources", async () => {
     const res = await request(app).get("/api/resources/mine").set("Cookie", cookie);
     if (res.status !== 200) throw new Error(`Expected 200 got ${res.status}`);
-    if (!Array.isArray(res.body.data) || !res.body.data.some((r: any) => r.id === resourceId)) {
+    const items = res.body.data?.items ?? res.body.data;
+    if (!Array.isArray(items) || !items.some((r: any) => r.id === resourceId)) {
       throw new Error("Created resource not found in /mine list");
     }
   });
@@ -80,7 +81,8 @@ try {
   await test("GET /api/resources/nearby returns available resources", async () => {
     const res = await request(app).get("/api/resources/nearby?lat=37.7749&lng=-122.4194&radiusKm=10");
     if (res.status !== 200) throw new Error(`Expected 200 got ${res.status} ${JSON.stringify(res.body)}`);
-    if (!Array.isArray(res.body.data)) throw new Error("Expected array of resources");
+    const items = res.body.data?.items ?? res.body.data;
+    if (!Array.isArray(items)) throw new Error("Expected array of resources");
   });
 
   await test("GET /api/resources/:resourceId/chain returns empty chain for untransacted resource", async () => {

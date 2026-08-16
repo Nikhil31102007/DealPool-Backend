@@ -88,9 +88,6 @@ export const findDealById = async (
 ): Promise<Deal | null> => {
     const executor = client ?? pool;
     const result = await executor.query(
-        // FOR UPDATE locks the row for the duration of the transaction —
-        // serializes concurrent offer accepts on the same deal so only the
-        // first sees status = 'open'. Outside a transaction it's a no-op.
         `SELECT ${SELECT_LIST} FROM deals WHERE id = $1${client ? " FOR UPDATE" : ""}`,
         [id]
     );
@@ -98,11 +95,7 @@ export const findDealById = async (
     return result.rows[0] ?? null;
 };
 
-export const listDeals = async (
-    filters: { category?: string; status?: string },
-    limit: number,
-    offset: number
-): Promise<Deal[]> => {
+const buildDealFilterClause = (filters: { category?: string; status?: string }) => {
     const conditions: string[] = [];
     const values: unknown[] = [];
 
@@ -116,14 +109,21 @@ export const listDeals = async (
         conditions.push(`status = $${values.length}`);
     }
 
-    const whereClause =
-        conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
-    values.push(limit);
-    const limitIndex = values.length;
+    return { whereClause, values };
+};
 
-    values.push(offset);
-    const offsetIndex = values.length;
+export const listDeals = async (
+    filters: { category?: string; status?: string },
+    limit: number,
+    offset: number
+): Promise<Deal[]> => {
+    const { whereClause, values } = buildDealFilterClause(filters);
+
+    const paginatedValues = [...values, limit, offset];
+    const limitIndex = paginatedValues.length - 1;
+    const offsetIndex = paginatedValues.length;
 
     const result = await pool.query(
         `
@@ -133,10 +133,24 @@ export const listDeals = async (
         ORDER BY created_at DESC
         LIMIT $${limitIndex} OFFSET $${offsetIndex}
         `,
-        values
+        paginatedValues
     );
 
     return result.rows;
+};
+
+export const countDeals = async (filters: {
+    category?: string;
+    status?: string;
+}): Promise<number> => {
+    const { whereClause, values } = buildDealFilterClause(filters);
+
+    const result = await pool.query(
+        `SELECT COUNT(*)::int AS count FROM deals ${whereClause}`,
+        values
+    );
+
+    return result.rows[0].count;
 };
 
 export const findNearbyDeals = async (
@@ -161,6 +175,24 @@ export const findNearbyDeals = async (
     );
 
     return result.rows;
+};
+
+export const countNearbyDeals = async (
+    lat: number,
+    lng: number,
+    radiusKm: number
+): Promise<number> => {
+    const result = await pool.query(
+        `
+        SELECT COUNT(*)::int AS count
+        FROM deals
+        WHERE status = 'open'
+          AND ST_DWithin(location, ST_MakePoint($1, $2)::geography, $3 * 1000)
+        `,
+        [lng, lat, radiusKm]
+    );
+
+    return result.rows[0].count;
 };
 
 export const updateDealFields = async (

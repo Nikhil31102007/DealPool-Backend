@@ -9,6 +9,8 @@ TESTS=(
   "tests/resources.test.ts"
   "tests/skills.test.ts"
   "tests/transactions.test.ts"
+  "tests/payments.test.ts"
+  "tests/e2e_full_suite.test.ts"
 )
 
 PASSED=()

@@ -53,12 +53,30 @@ export const findResourceById = async (
     return result.rows[0] ?? null;
 };
 
-export const listResourcesByOwner = async (ownerId: string): Promise<Resource[]> => {
+export const listResourcesByOwner = async (
+    ownerId: string,
+    limit: number,
+    offset: number
+): Promise<Resource[]> => {
     const result = await pool.query(
-        `SELECT ${SELECT_LIST} FROM resources WHERE owner_id = $1 ORDER BY created_at DESC`,
-        [ownerId]
+        `
+        SELECT ${SELECT_LIST}
+        FROM resources
+        WHERE owner_id = $1
+        ORDER BY created_at DESC
+        LIMIT $2 OFFSET $3
+        `,
+        [ownerId, limit, offset]
     );
     return result.rows;
+};
+
+export const countResourcesByOwner = async (ownerId: string): Promise<number> => {
+    const result = await pool.query(
+        `SELECT COUNT(*)::int AS count FROM resources WHERE owner_id = $1`,
+        [ownerId]
+    );
+    return result.rows[0].count;
 };
 
 export const findNearbyResources = async (
@@ -77,6 +95,21 @@ export const findNearbyResources = async (
         [lng, lat, radiusKm, limit, offset]
     );
     return result.rows;
+};
+
+export const countNearbyResources = async (
+    lat: number, lng: number, radiusKm: number
+): Promise<number> => {
+    const result = await pool.query(
+        `
+        SELECT COUNT(*)::int AS count
+        FROM resources
+        WHERE is_available = true
+          AND ST_DWithin(location, ST_MakePoint($1, $2)::geography, $3 * 1000)
+        `,
+        [lng, lat, radiusKm]
+    );
+    return result.rows[0].count;
 };
 
 export const updateResourceFields = async (

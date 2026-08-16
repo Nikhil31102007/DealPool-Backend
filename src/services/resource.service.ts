@@ -1,8 +1,9 @@
 import {
-    insertResource, findResourceById, listResourcesByOwner,
-    findNearbyResources, updateResourceFields, deleteResource, Resource,
+    insertResource, findResourceById, listResourcesByOwner, countResourcesByOwner,
+    findNearbyResources, countNearbyResources, updateResourceFields, deleteResource, Resource,
 } from "../models/resource.model";
 import { badRequest, notFound, forbidden } from "../utils/errors";
+import { parsePagination, buildPaginatedResult, PaginatedResult } from "../utils/pagination";
 
 interface CreateResourceInput {
     title: string; description?: string; category?: string;
@@ -32,25 +33,44 @@ export const getResourceById = async (id: string): Promise<Resource> => {
     return resource;
 };
 
-export const listMyResources = async (ownerId: string): Promise<Resource[]> => {
-    return listResourcesByOwner(ownerId);
+export const listMyResources = async (
+    ownerId: string,
+    rawQuery: { limit?: unknown; offset?: unknown }
+): Promise<PaginatedResult<Resource>> => {
+    const { limit, offset } = parsePagination(rawQuery);
+
+    const [items, total] = await Promise.all([
+        listResourcesByOwner(ownerId, limit, offset),
+        countResourcesByOwner(ownerId),
+    ]);
+
+    return buildPaginatedResult(items, total, limit, offset);
 };
 
 export const listNearbyResources = async (
-    lat: number, lng: number, radiusKm: number, limit = 50, offset = 0
-) => {
+    lat: number, lng: number, radiusKm: number,
+    rawQuery: { limit?: unknown; offset?: unknown }
+): Promise<PaginatedResult<Resource & { distance_km: number }>> => {
     if (Number.isNaN(lat) || Number.isNaN(lng)) {
         throw badRequest("lat and lng are required", "MISSING_COORDINATES");
     }
-    return findNearbyResources(lat, lng, radiusKm || 10, limit, offset);
+
+    const { limit, offset } = parsePagination(rawQuery);
+    const effectiveRadius = radiusKm || 10;
+
+    const [items, total] = await Promise.all([
+        findNearbyResources(lat, lng, effectiveRadius, limit, offset),
+        countNearbyResources(lat, lng, effectiveRadius),
+    ]);
+
+    return buildPaginatedResult(items, total, limit, offset);
 };
 
 const UPDATABLE_RESOURCE_FIELDS = [
     "title", "description", "category", "condition", "is_available",
 ] as const;
-// NOTE: current_holder_id deliberately excluded — only the transaction
-// flow (acceptOffer) is allowed to move custody, same principle as
-// role/avg_rating on profiles.
+// current_holder_id deliberately excluded — only the transaction flow
+// (acceptOffer) is allowed to move custody.
 
 export const updateResource = async (
     id: string, userId: string, input: Record<string, unknown>

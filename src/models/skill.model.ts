@@ -52,12 +52,30 @@ export const findSkillById = async (
     return result.rows[0] ?? null;
 };
 
-export const listSkillsByUser = async (userId: string): Promise<Skill[]> => {
+export const listSkillsByUser = async (
+    userId: string,
+    limit: number,
+    offset: number
+): Promise<Skill[]> => {
     const result = await pool.query(
-        `SELECT ${SELECT_LIST} FROM skills WHERE user_id = $1 ORDER BY created_at DESC`,
-        [userId]
+        `
+        SELECT ${SELECT_LIST}
+        FROM skills
+        WHERE user_id = $1
+        ORDER BY created_at DESC
+        LIMIT $2 OFFSET $3
+        `,
+        [userId, limit, offset]
     );
     return result.rows;
+};
+
+export const countSkillsByUser = async (userId: string): Promise<number> => {
+    const result = await pool.query(
+        `SELECT COUNT(*)::int AS count FROM skills WHERE user_id = $1`,
+        [userId]
+    );
+    return result.rows[0].count;
 };
 
 export const updateSkillFields = async (

@@ -1,8 +1,10 @@
+import crypto from "crypto";
 import dotenv from "dotenv";
 import path from "path";
 import request from "supertest";
 import pool from "../src/config/db";
 import { firebaseAuth } from "../src/config/firebase";
+import { getRazorpayKeySecret } from "../src/config/razorpay";
 
 dotenv.config({
     path: path.resolve(process.cwd(), ".env"),
@@ -211,7 +213,8 @@ try {
             .set("Cookie", cookieA);
 
         if (res.status !== 200) throw new Error(`Expected 200, got ${res.status}`);
-        const found = res.body.data.find((s: { id: string }) => s.id === skillId1);
+        const items = res.body.data?.items ?? res.body.data;
+        const found = items.find((s: { id: string }) => s.id === skillId1);
         if (!found) throw new Error("Created skill not found in /mine list");
     });
 
@@ -245,7 +248,8 @@ try {
             .get("/api/resources/nearby?lat=37.7740&lng=-122.4180&radiusKm=5");
 
         if (res.status !== 200) throw new Error(`Expected 200, got ${res.status}`);
-        const match = res.body.data.find((r: { id: string }) => r.id === resourceId1);
+        const items = res.body.data?.items ?? res.body.data;
+        const match = items.find((r: { id: string }) => r.id === resourceId1);
         if (!match) throw new Error("Resource not found in nearby PostGIS query");
         if (typeof match.distance_km !== "number") throw new Error("Missing distance_km calculation");
     });
@@ -410,6 +414,64 @@ try {
         if (resAllowed.status !== 200) {
             throw new Error(`Expected 200 OK for participant, got ${resAllowed.status}`);
         }
+    });
+
+    // ----------------------------------------------------------------
+    // 7. PAYMENTS & RAZORPAY SETTLEMENT
+    // ----------------------------------------------------------------
+    console.log("\n--- 7. Payments & Razorpay Integration ---");
+
+    let rzpOrderId: string;
+    let paymentId: string;
+
+    await test("POST /api/payments/order: User B (payer for Tx 1) creates Razorpay order", async () => {
+        const res = await request(app)
+            .post("/api/payments/order")
+            .set("Cookie", cookieB)
+            .send({ transactionId: txId1 });
+
+        if (res.status !== 201) throw new Error(`Expected 201, got ${res.status}: ${JSON.stringify(res.body)}`);
+        if (!res.body.data?.orderId || res.body.data?.amountInRupees !== 300) {
+            throw new Error("Invalid payment order response");
+        }
+
+        rzpOrderId = res.body.data.orderId;
+        paymentId = res.body.data.paymentId;
+    });
+
+    await test("POST /api/payments/verify: User B verifies valid HMAC signature and confirms transaction", async () => {
+        const fakePaymentId = `pay_e2e_${Date.now()}`;
+        const keySecret = getRazorpayKeySecret();
+        const signature = crypto
+            .createHmac("sha256", keySecret)
+            .update(`${rzpOrderId}|${fakePaymentId}`)
+            .digest("hex");
+
+        const res = await request(app)
+            .post("/api/payments/verify")
+            .set("Cookie", cookieB)
+            .send({
+                razorpayOrderId: rzpOrderId,
+                razorpayPaymentId: fakePaymentId,
+                razorpaySignature: signature,
+            });
+
+        if (res.status !== 200) throw new Error(`Expected 200, got ${res.status}: ${JSON.stringify(res.body)}`);
+        if (res.body.data?.payment?.status !== "captured") throw new Error("Payment status not captured");
+        if (res.body.data?.transaction?.status !== "confirmed") throw new Error("Transaction status not confirmed");
+    });
+
+    await test("GET /api/payments/:id & GET /api/payments/transaction/:id return payment details", async () => {
+        const resPayment = await request(app)
+            .get(`/api/payments/${paymentId}`)
+            .set("Cookie", cookieB);
+        if (resPayment.status !== 200) throw new Error(`Expected 200, got ${resPayment.status}`);
+
+        const resTxPayments = await request(app)
+            .get(`/api/payments/transaction/${txId1}`)
+            .set("Cookie", cookieA);
+        if (resTxPayments.status !== 200) throw new Error(`Expected 200, got ${resTxPayments.status}`);
+        if (!resTxPayments.body.data?.length) throw new Error("Expected at least one payment record for Tx 1");
     });
 
     console.log("\n========================================================");

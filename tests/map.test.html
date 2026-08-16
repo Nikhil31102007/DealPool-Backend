@@ -63,7 +63,11 @@
       markers = [];
 
       try {
-        const res = await fetch(apiUrl('/api/deals'), { credentials: 'include' });
+        // Server now paginates: { success, data: { items: [...], pagination: {...} } }
+        // limit=100 pulls the max single page; for a full "load everything" view
+        // this would need to loop using pagination.hasMore, but for the map test
+        // page one page is enough to visually confirm markers render.
+        const res = await fetch(apiUrl('/api/deals?limit=100'), { credentials: 'include' });
         const json = await res.json();
 
         if (!json.success) {
@@ -71,13 +75,19 @@
           return;
         }
 
-        (json.data || []).forEach(d => {
+        const deals = json.data?.items || [];
+
+        deals.forEach(d => {
           const coords = d.location?.coordinates || [d.lng, d.lat];
           const lat = coords[1] ?? d.lat ?? 0;
           const lng = coords[0] ?? d.lng ?? 0;
           const marker = L.marker([lat, lng]).addTo(map).bindPopup(d.title || 'Deal');
           markers.push(marker);
         });
+
+        if (json.data?.pagination?.hasMore) {
+          console.warn(`Showing ${deals.length} of ${json.data.pagination.total} deals — more exist beyond this page.`);
+        }
       } catch (e) {
         console.error(e);
       }
